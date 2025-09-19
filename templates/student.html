@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Student Portal</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .exam-status {
+            font-size: 1.25rem;
+        }
+    </style>
+</head>
+<body class="p-3">
+    <div class="container">
+        <h1 class="mb-4">Student Cheating Notifications 🎓</h1>
+        <div id="cheating-notifications" class="list-group mb-5">
+        </div>
+        
+        <hr>
+
+        <h1 class="mb-4">Exam Submission Portal 📝</h1>
+        <div id="exam-container">
+            <div class="alert alert-info" role="alert" id="examStatusAlert">
+                Exam is not yet active. Please wait for the teacher to start it.
+            </div>
+            
+            <div id="submission-success" class="alert alert-success d-none" role="alert">
+                <p>✅ Your exam has been submitted successfully!</p>
+            </div>
+            
+            <form id="examForm" class="d-none">
+                <div class="mb-3">
+                    <label for="rollNoInput" class="form-label">Enter Your Roll No:</label>
+                    <input type="text" class="form-control" id="rollNoInput" required>
+                </div>
+                <div class="mb-3">
+                    <label for="q1" class="form-label">Q1. What is the capital of France?</label>
+                    <input type="text" class="form-control" id="q1" name="q1" required>
+                </div>
+                <div class="mb-3">
+                    <label for="q2" class="form-label">Q2. What is the main characteristic of a distributed system?</label>
+                    <input type="text" class="form-control" id="q2" name="q2" required>
+                </div>
+                <button type="submit" class="btn btn-success">Submit Exam</button>
+            </form>
+        </div>
+    </div>
+
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', (event) => {
+            const socket = io();
+            const notificationsDiv = document.getElementById('cheating-notifications');
+            const examForm = document.getElementById('examForm');
+            const examStatusAlert = document.getElementById('examStatusAlert');
+            const rollNoInput = document.getElementById('rollNoInput');
+            const submissionSuccessAlert = document.getElementById('submission-success');
+
+            socket.on('connect', () => {
+                console.log('Connected to server!');
+            });
+
+            // Listen for the 'student_notification' event
+            socket.on('student_notification', (data) => {
+                const newNotification = document.createElement('div');
+                newNotification.className = `list-group-item list-group-item-action list-group-item-${data.type}`;
+                newNotification.textContent = `🚨 ${data.message} (${data.timestamp})`;
+                notificationsDiv.prepend(newNotification);
+            });
+
+            // Listen for 'exam_status' event
+            socket.on('exam_status', (data) => {
+                if (data.status === 'started') {
+                    examStatusAlert.className = 'alert alert-success';
+                    examStatusAlert.textContent = 'Exam is active! You can now submit your answers.';
+                    examForm.classList.remove('d-none');
+                    submissionSuccessAlert.classList.add('d-none');
+                } else if (data.status === 'ended') {
+                    examStatusAlert.className = 'alert alert-danger';
+                    examStatusAlert.textContent = 'The exam has ended.';
+                    examForm.classList.add('d-none');
+                }
+            });
+
+            // Handle exam form submission
+            examForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const studentId = rollNoInput.value;
+                if (!studentId) {
+                    alert('Please enter your roll number.');
+                    return;
+                }
+                const answers = {
+                    q1: document.getElementById('q1').value,
+                    q2: document.getElementById('q2').value,
+                };
+
+                fetch('/manual_submit', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        student_id: studentId,
+                        answers: answers,
+                    })
+                }).then(response => response.json())
+                  .then(data => {
+                      if (data.error) {
+                          alert(`Submission failed: ${data.error}`);
+                      } else {
+                          // Show success message and reset the form for the next student
+                          examForm.reset();
+                          submissionSuccessAlert.classList.remove('d-none');
+                      }
+                  });
+            });
+        });
+    </script>
+</body>
+</html>

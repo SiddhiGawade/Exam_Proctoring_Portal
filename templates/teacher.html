@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Teacher's Marksheet & Submissions</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            padding: 20px;
+            background-color: #f8f9fa;
+        }
+        .terminated {
+            background-color: #f8d7da !important;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="mb-4">Live Teacher's Marksheet 👩‍🏫</h1>
+        <table class="table table-striped table-bordered">
+            <thead class="table-dark">
+                <tr>
+                    <th>Roll No.</th>
+                    <th>Name</th>
+                    <th>Marks</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody id="marksheet-body">
+            </tbody>
+        </table>
+
+        <hr>
+
+        <h1 class="mb-4 mt-5">Live Exam Submissions 📝</h1>
+        <table class="table table-striped table-bordered">
+            <thead class="table-dark">
+                <tr>
+                    <th>Student ID</th>
+                    <th>Name</th>
+                    <th>Marks</th>
+                    <th>Submission Type</th>
+                    <th>Submitted At</th>
+                </tr>
+            </thead>
+            <tbody id="submission-body">
+            </tbody>
+        </table>
+    </div>
+
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', (event) => {
+            const socket = io();
+            const marksheetBody = document.getElementById('marksheet-body');
+            const submissionBody = document.getElementById('submission-body');
+
+            socket.on('connect', () => {
+                console.log('Connected to server!');
+            });
+
+            // Listen for the 'marks_update' event from the server
+            socket.on('marks_update', (students) => {
+                marksheetBody.innerHTML = '';
+                // The data received is an array of objects. We need to iterate over them correctly.
+                students.forEach(([roll_no, student_data]) => {
+                    const row = document.createElement('tr');
+                    const status = student_data.exam_terminated ? 'Terminated' : 'Active';
+                    if (student_data.exam_terminated) {
+                        row.classList.add('terminated');
+                    }
+                    row.innerHTML = `
+                        <td>${roll_no}</td>
+                        <td>${student_data.name}</td>
+                        <td>${student_data.marks}</td>
+                        <td>${status}</td>
+                    `;
+                    marksheetBody.appendChild(row);
+                });
+            });
+
+            // Listen for 'submission_update' event
+            socket.on('submission_update', (submissions) => {
+                submissionBody.innerHTML = '';
+                for (const [sid, data] of Object.entries(submissions)) {
+                    const row = document.createElement('tr');
+                    const submissionType = data.auto ? 'Auto' : 'Manual';
+                    row.innerHTML = `
+                        <td>${sid}</td>
+                        <td>${data.name}</td>
+                        <td>${data.marks}</td>
+                        <td>${submissionType}</td>
+                        <td>${new Date(data.submitted_at).toLocaleTimeString()}</td>
+                    `;
+                    submissionBody.appendChild(row);
+                }
+            });
+        });
+    </script>
+</body>
+</html>

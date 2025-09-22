@@ -113,7 +113,15 @@
                   });
             });
 
-            // Listen for the 'processor_log' event
+            // Listen for the 'main_log' event from the load balancing task
+            socket.on('main_log', (data) => {
+                const p = document.createElement('p');
+                p.textContent = `>> ${data.log}`;
+                logDiv.appendChild(p);
+                logDiv.scrollTop = logDiv.scrollHeight;
+            });
+            
+            // Listen for the 'processor_log' event from the cheating detection task
             socket.on('processor_log', (data) => {
                 const p = document.createElement('p');
                 p.textContent = `>> ${data.log}`;

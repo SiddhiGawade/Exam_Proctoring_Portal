@@ -1,23 +1,23 @@
-# app.py
 from flask import Flask, render_template, request, jsonify
 from flask_socketio import SocketIO
 from datetime import datetime, timedelta
 import time
 import random
-from threading import Thread, Lock, Timer
+from threading import Thread, Lock, Timer, Semaphore
 import logging
+import json, os, threading
+import xmlrpc.client
+from xmlrpc.server import SimpleXMLRPCServer, SimpleXMLRPCRequestHandler
+from socketserver import ThreadingMixIn
 
 # --- SETUP ---
-# 1. Initialize the Flask App and SocketIO
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'your-secret-key!' 
+app.config['SECRET_KEY'] = 'your-secret-key!'
 socketio = SocketIO(app)
-
-# 2. Silence the terminal logs from Flask's default server (Werkzeug)
 log = logging.getLogger('werkzeug')
 log.setLevel(logging.ERROR)
 
-# --- TASK 2 & 3: CHEATING DETECTION DATA ---
+# --- WEB PORTAL LOGIC ---
 student_dataset = {
     '24102A2001': 'SIDDHI GAWADE', '24102A2002': 'SANDEEP MAJUMDAR',
     '24102A2003': 'CHIRAG CHAUDHARI', '24102A2004': 'ANUSHKA UNDE',
@@ -26,7 +26,6 @@ student_dataset = {
     '24102A2009': 'PREM DESHMUKH', '24102A2010': 'ISHA BANSAL',
 }
 
-# This function resets the students' data to their initial state.
 def reset_student_data():
     return {
         roll_no: {'name': name, 'marks': 100, 'cheating_count': 0, 'exam_terminated': False}
@@ -34,14 +33,6 @@ def reset_student_data():
     }
 
 students_data = reset_student_data()
-
-# --- TASK 4: TIME SYNCHRONIZATION DATA ---
-task4_data = {
-    "client_cvs": {},
-    "expected_clients": {"Student", "Teacher"}
-}
-
-# --- NEW: EXAM SUBMISSION DATA & LOCK ---
 StatusDB = {}
 SubmissionDB = {}
 exam_active = False
@@ -49,29 +40,39 @@ exam_timer = None
 cheating_thread = None
 lock = Lock()
 
-# --- FIX: Update the auto_submit_all function to include the student's name ---
-def auto_submit_all():
-    global exam_active
-    with lock:
-        if not exam_active:
-            return
-        
-        for sid, submitted in StatusDB.items():
-            if not submitted:
-                SubmissionDB[sid] = {
-                    "answers": {},
-                    "auto": True,
-                    "marks": 0,
-                    "submitted_at": datetime.now().isoformat(),
-                    "name": student_dataset.get(sid, "Unknown")  # Add this line to fetch the name
-                }
-                StatusDB[sid] = True
-        exam_active = False
-    
-    log_msg = "Exam ended. All pending submissions have been auto-submitted."
-    socketio.emit('processor_log', {'log': log_msg})
-    socketio.emit('exam_status', {'status': 'ended'})
-    socketio.emit('submission_update', SubmissionDB)
+# --- NEW: TASK 7 Load Balancing State ---
+PRIMARY_CAPACITY = 5
+BUFFER_SIZE = 5
+main_processor_requests_count = 0
+main_processor_buffer = []
+main_processor_lock = Lock()
+main_processor_semaphore = Semaphore(PRIMARY_CAPACITY)
+
+# --- NEW: RPC Endpoints for receiving logs from processors ---
+class RequestHandler(SimpleXMLRPCRequestHandler):
+    rpc_paths = ('/RPC2',)
+
+def receive_main_log(msg):
+    log_time = datetime.now().strftime('%H:%M:%S')
+    socketio.emit('main_log', {'log': f"[{log_time}] {msg}"})
+    return True
+
+def receive_backup_log(msg):
+    log_time = datetime.now().strftime('%H:%M:%S')
+    socketio.emit('backup_log', {'log': f"[{log_time}] {msg}"})
+    return True
+
+class ThreadedXMLRPCServer(Thread, SimpleXMLRPCServer):
+    def __init__(self, host, port):
+        SimpleXMLRPCServer.__init__(self, (host, port), requestHandler=RequestHandler)
+        Thread.__init__(self)
+        self.daemon = True
+
+    def run(self):
+        self.register_function(receive_main_log, "receive_main_log")
+        self.register_function(receive_backup_log, "receive_backup_log")
+        print("Web Portal RPC Server running on port 8000...")
+        self.serve_forever()
 
 # --- ROUTES FOR WEBPAGES ---
 @app.route('/')
@@ -90,94 +91,70 @@ def student_view():
 def processor_view():
     return render_template('processor.html')
 
-@app.route('/task4')
-def task4_view():
-    return render_template('task4.html')
+@app.route('/backup_server')
+def backup_server_view():
+    return render_template('backup_server.html')
 
-# --- TASK 4: API ENDPOINTS FOR TIME SYNC ---
-@app.route("/broadcast_time", methods=["GET"])
-def broadcast_time():
-    server_time = datetime.now().strftime("%H:%M:%S")
-    log_msg = f"[Task 4] Server Time Broadcasted: {server_time}"
-    socketio.emit('processor_log', {'log': log_msg})
-    return jsonify({"server_time": server_time})
-
-@app.route("/send_cv", methods=["POST"])
-def receive_cv():
-    data = request.json
-    name, cv = data["name"], data["cv"]
-    task4_data["client_cvs"][name] = cv
-    log_msg = f"[Task 4] Received CV from {name}: {cv:.2f} sec"
-    socketio.emit('processor_log', {'log': log_msg})
-    return jsonify({"status": "CV received"})
-
-@app.route("/calculate_adjustments", methods=["GET"])
-def calculate_adjustments():
-    if task4_data["expected_clients"].issubset(task4_data["client_cvs"].keys()):
-        avg_cv = sum(task4_data["client_cvs"].values()) / len(task4_data["client_cvs"])
-        log_msg = f"[Task 4] Average CV calculated: {avg_cv:.2f} sec"
-        socketio.emit('processor_log', {'log': log_msg})
-        
-        cap_values = {name: avg_cv - cv for name, cv in task4_data["client_cvs"].items()}
-        log_msg = f"[Task 4] CAPs calculated: {cap_values}"
-        socketio.emit('processor_log', {'log': log_msg})
-        
-        return jsonify({"cap": cap_values})
-    else:
-        remaining = task4_data["expected_clients"] - set(task4_data["client_cvs"].keys())
-        return jsonify({"status": f"Waiting for {len(remaining)} more clients..."})
-
-@app.route("/reset_task4", methods=["POST"])
-def reset_task4():
-    task4_data["client_cvs"].clear()
-    log_msg = "[Task 4] State has been reset."
-    socketio.emit('processor_log', {'log': log_msg})
-    return jsonify({"status": "Task 4 reset successfully"})
-
-# --- NEW: EXAM SUBMISSION API ENDPOINTS ---
+# --- EXAM SUBMISSION API ENDPOINTS ---
 @app.route("/start_exam", methods=["POST"])
 def start_exam():
-    global exam_active, StatusDB, SubmissionDB, exam_timer, cheating_thread, students_data
-    
-    # Reset students_data on exam start
+    global exam_active, StatusDB, SubmissionDB, exam_timer, cheating_thread, students_data, main_processor_requests_count, main_processor_buffer
     students_data = reset_student_data()
     socketio.emit('marks_update', list(students_data.items()))
-
     data = request.json
     students = data.get("students", [])
     duration = data.get("duration", 60)
-
     with lock:
         if exam_active:
             return jsonify({"error": "Exam is already active"}), 400
         StatusDB = {sid: False for sid in students}
         SubmissionDB.clear()
         exam_active = True
-
     if exam_timer and exam_timer.is_alive():
         exam_timer.cancel()
     exam_timer = Timer(duration, auto_submit_all)
     exam_timer.start()
-
-    # Start cheating detection thread only when exam starts
     if cheating_thread is None or not cheating_thread.is_alive():
         cheating_thread = Thread(target=cheating_simulation)
         cheating_thread.daemon = True
         cheating_thread.start()
-
     log_msg = f"Exam started for {len(students)} students. Duration: {duration} seconds."
-    socketio.emit('processor_log', {'log': log_msg})
+    socketio.emit('main_log', {'log': log_msg})
     socketio.emit('exam_status', {'status': 'started', 'duration': duration, 'students': students})
     socketio.emit('submission_status_update', StatusDB)
-    
+    main_processor_requests_count = 0
+    main_processor_buffer.clear()
     return jsonify({"msg": "Exam started"})
+
+def auto_submit_all():
+    global exam_active
+    with lock:
+        if not exam_active:
+            return
+        for sid, submitted in StatusDB.items():
+            if not submitted:
+                SubmissionDB[sid] = {
+                    "answers": {},
+                    "auto": True,
+                    "marks": 0,
+                    "submitted_at": datetime.now().isoformat(),
+                    "name": student_dataset.get(sid, "Unknown")
+                }
+                StatusDB[sid] = True
+        exam_active = False
+    log_msg = "Exam ended. All pending submissions have been auto-submitted."
+    socketio.emit('main_log', {'log': log_msg})
+    socketio.emit('exam_status', {'status': 'ended'})
+    socketio.emit('submission_update', SubmissionDB)
+
+c = 0
 
 @app.route("/manual_submit", methods=["POST"])
 def manual_submit():
     data = request.json
     sid = data["student_id"]
     answers = data["answers"]
-
+    global c
     with lock:
         if not exam_active:
             return jsonify({"error": "Exam not active"}), 400
@@ -185,8 +162,6 @@ def manual_submit():
             return jsonify({"error": "Unknown student"}), 400
         if StatusDB[sid]:
             return jsonify({"error": "Already submitted"}), 400
-
-        # Calculate marks based on number of answers (simple example)
         marks = len(answers)
         SubmissionDB[sid] = {
             "answers": answers,
@@ -196,25 +171,79 @@ def manual_submit():
             "name": student_dataset.get(sid, "Unknown")
         }
         StatusDB[sid] = True
-
     log_msg = f"Student {sid} submitted exam manually. Marks: {marks}"
-    socketio.emit('processor_log', {'log': log_msg})
+    if c < 5:
+        socketio.emit('main_log', {'log': log_msg})
+        c += 1
+    else:
+        socketio.emit('backup_log', {'log': log_msg})
+        # Only log migration event to main_log
+        log = f"Student {sid} handled by Backup Server"
+        socketio.emit('main_log', {'log': log})
+        c += 1
+
     socketio.emit('student_notification', {'message': f"Your exam has been submitted successfully.", 'type': 'success', 'timestamp': time.strftime('%H:%M:%S')})
     socketio.emit('submission_update', SubmissionDB)
     socketio.emit('submission_status_update', StatusDB)
-    
     return jsonify({"msg": "Submitted successfully"})
+
+# --- NEW: TASK 7 Load Balancing Logic ---
+@app.route("/process_request", methods=["POST"])
+def process_request():
+    global main_processor_requests_count
+    data = request.json
+    req_id = data["req_id"]
+    
+    with main_processor_lock:
+        main_processor_requests_count += 1
+        current_count = main_processor_requests_count
+    
+    if main_processor_semaphore.acquire(blocking=False):
+        Thread(target=process_on_main, args=(req_id, current_count,)).start()
+        return jsonify({"status": f"Queued for main processing."})
+    else:
+        main_processor_buffer.append(req_id)
+        log_message = f"Student {req_id} added to buffer. Size: {len(main_processor_buffer)}/{BUFFER_SIZE}"
+        socketio.emit('main_log', {'log': log_message})
+        
+        if len(main_processor_buffer) == BUFFER_SIZE:
+            log_message = f"Buffer full. Sending batch of {len(main_processor_buffer)} requests to Backup Server."
+            socketio.emit('main_log', {'log': log_message})
+            
+            backup_processor_thread = Thread(target=process_batch_backup, args=(main_processor_buffer[:],))
+            backup_processor_thread.start()
+            
+            main_processor_buffer.clear()
+        
+        return jsonify({"status": f"Queued for backup: {req_id}"})
+
+def process_on_main(req_id, current_count):
+    log_message = f"Processing student {req_id} on MAIN (request #{current_count})"
+    socketio.emit('main_log', {'log': log_message})
+    time.sleep(2)
+    log_message = f"Completed processing of {req_id} on MAIN."
+    socketio.emit('main_log', {'log': log_message})
+    main_processor_semaphore.release()
+
+def process_batch_backup(req_list):
+    try:
+        backup = xmlrpc.client.ServerProxy("http://127.0.0.1:8601/RPC2", allow_none=True)
+        resp = backup.process_batch(req_list)
+        socketio.emit('main_log', {'log': f"Sent batch to backup server: {resp}"})
+    except Exception as e:
+        socketio.emit('main_log', {'log': f"ERROR: Could not reach backup server. {e}"})
 
 # --- BACKGROUND THREAD FOR CHEATING SIMULATION ---
 def cheating_simulation():
     socketio.sleep(3)
-    socketio.emit('processor_log', {'log': 'Cheating simulation background thread started.'})
+    log_message = 'Cheating simulation background thread started.'
+    socketio.emit('processor_log', {'log': log_message})
+    # Remove backup_log emission here
     while True:
         if not exam_active:
             log_message = "Exam ended. Cheating simulation stopped."
             socketio.emit('processor_log', {'log': log_message})
             break
-
         active_students = [
             roll_no for roll_no, data in students_data.items() if not data['exam_terminated']
         ]
@@ -222,12 +251,10 @@ def cheating_simulation():
             log_message = "All student exams have been terminated. Simulation stopped."
             socketio.emit('processor_log', {'log': log_message})
             break
-        
         cheater_roll_no = random.choice(active_students)
         student = students_data[cheater_roll_no]
         student['cheating_count'] += 1
         notification_for_student = {}
-        
         if student['cheating_count'] == 1:
             student['marks'] = 50
             notification_for_student = {
@@ -241,9 +268,9 @@ def cheating_simulation():
                 'message': f"2nd cheating detected for {student['name']}. Your exam has been terminated.",
                 'type': 'danger', 'timestamp': time.strftime('%H:%M:%S')
             }
-        
         log_message = f"Cheating detected for {student['name']} ({cheater_roll_no})."
         socketio.emit('processor_log', {'log': log_message})
+        # Remove backup_log emission here
         socketio.emit('student_notification', notification_for_student)
         socketio.emit('marks_update', list(students_data.items()))
         socketio.sleep(random.randint(5, 10))
@@ -251,10 +278,8 @@ def cheating_simulation():
 # --- SOCKET.IO CONNECTION ---
 @socketio.on('connect')
 def handle_connect():
-    socketio.emit('processor_log', {'log': 'A new client connected to the website.'})
-    socketio.emit('marks_update', list(students_data.items()))
-    socketio.emit('submission_status_update', StatusDB)
-    socketio.emit('submission_update', SubmissionDB)
+    log_message = "A new client connected to the website."
+    socketio.emit('processor_log', {'log': log_message})
 
 # --- MAIN EXECUTION BLOCK ---
 if __name__ == '__main__':

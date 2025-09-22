@@ -3,7 +3,7 @@ from flask_socketio import SocketIO
 from datetime import datetime, timedelta
 import time
 import random
-from threading import Thread, Lock, Timer, Semaphore
+from threading import Thread, Lock, Timer, Semaphore, Condition
 import logging
 import json, os, threading
 import xmlrpc.client
@@ -40,7 +40,7 @@ exam_timer = None
 cheating_thread = None
 lock = Lock()
 
-# --- NEW: TASK 7 Load Balancing State ---
+# --- TASK 7 Load Balancing State ---
 PRIMARY_CAPACITY = 5
 BUFFER_SIZE = 5
 main_processor_requests_count = 0
@@ -48,7 +48,13 @@ main_processor_buffer = []
 main_processor_lock = Lock()
 main_processor_semaphore = Semaphore(PRIMARY_CAPACITY)
 
-# --- NEW: RPC Endpoints for receiving logs from processors ---
+# --- NEW: TASK 8 Replicated DB State ---
+PRIMARY_FILE = "primary_db.json"
+REPLICA_FILE = "replica_db.json"
+METADATA_FILE = "metadata.json"
+processor_server = None
+
+# --- RPC Endpoints for receiving logs from processors ---
 class RequestHandler(SimpleXMLRPCRequestHandler):
     rpc_paths = ('/RPC2',)
 
@@ -94,6 +100,11 @@ def processor_view():
 @app.route('/backup_server')
 def backup_server_view():
     return render_template('backup_server.html')
+
+@app.route('/replicated_db')
+def replicated_db_view():
+    return render_template('replicated_db.html')
+
 
 # --- EXAM SUBMISSION API ENDPOINTS ---
 @app.route("/start_exam", methods=["POST"])
@@ -147,14 +158,11 @@ def auto_submit_all():
     socketio.emit('exam_status', {'status': 'ended'})
     socketio.emit('submission_update', SubmissionDB)
 
-c = 0
-
 @app.route("/manual_submit", methods=["POST"])
 def manual_submit():
     data = request.json
     sid = data["student_id"]
     answers = data["answers"]
-    global c
     with lock:
         if not exam_active:
             return jsonify({"error": "Exam not active"}), 400
@@ -172,22 +180,13 @@ def manual_submit():
         }
         StatusDB[sid] = True
     log_msg = f"Student {sid} submitted exam manually. Marks: {marks}"
-    if c < 5:
-        socketio.emit('main_log', {'log': log_msg})
-        c += 1
-    else:
-        socketio.emit('backup_log', {'log': log_msg})
-        # Only log migration event to main_log
-        log = f"Student {sid} handled by Backup Server"
-        socketio.emit('main_log', {'log': log})
-        c += 1
-
+    socketio.emit('main_log', {'log': log_msg})
     socketio.emit('student_notification', {'message': f"Your exam has been submitted successfully.", 'type': 'success', 'timestamp': time.strftime('%H:%M:%S')})
     socketio.emit('submission_update', SubmissionDB)
     socketio.emit('submission_status_update', StatusDB)
     return jsonify({"msg": "Submitted successfully"})
 
-# --- NEW: TASK 7 Load Balancing Logic ---
+# --- TASK 7 Load Balancing Logic ---
 @app.route("/process_request", methods=["POST"])
 def process_request():
     global main_processor_requests_count
@@ -210,8 +209,7 @@ def process_request():
             log_message = f"Buffer full. Sending batch of {len(main_processor_buffer)} requests to Backup Server."
             socketio.emit('main_log', {'log': log_message})
             
-            backup_processor_thread = Thread(target=process_batch_backup, args=(main_processor_buffer[:],))
-            backup_processor_thread.start()
+            backup_processor_thread = Thread(target=process_batch_backup, args=(main_processor_buffer[:],)).start()
             
             main_processor_buffer.clear()
         
@@ -238,7 +236,6 @@ def cheating_simulation():
     socketio.sleep(3)
     log_message = 'Cheating simulation background thread started.'
     socketio.emit('processor_log', {'log': log_message})
-    # Remove backup_log emission here
     while True:
         if not exam_active:
             log_message = "Exam ended. Cheating simulation stopped."
@@ -270,10 +267,181 @@ def cheating_simulation():
             }
         log_message = f"Cheating detected for {student['name']} ({cheater_roll_no})."
         socketio.emit('processor_log', {'log': log_message})
-        # Remove backup_log emission here
         socketio.emit('student_notification', notification_for_student)
         socketio.emit('marks_update', list(students_data.items()))
         socketio.sleep(random.randint(5, 10))
+
+# --- NEW: TASK 8 REPLICATED DB LOGIC ---
+class RWLock:
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.read_ready = threading.Condition(self.lock)
+        self.readers = 0
+        self.writer_active = False
+        self.rw_lock = Lock()
+        self.read_cond = Condition(self.rw_lock)
+        self.write_cond = Condition(self.rw_lock)
+
+    def try_acquire_read(self):
+        with self.lock:
+            if self.writer_active:
+                return False
+            self.readers += 1
+            return True
+
+    def release_read(self):
+        with self.lock:
+            self.readers -= 1
+            if self.readers == 0:
+                self.write_cond.notify()
+
+    def try_acquire_write(self):
+        with self.lock:
+            if self.writer_active or self.readers > 0:
+                return False
+            self.writer_active = True
+            return True
+
+    def release_write(self):
+        with self.lock:
+            self.writer_active = False
+            self.read_ready.notify_all()
+            self.write_cond.notify()
+
+class ProcessorServer:
+    def __init__(self, total_students=28, chunks=4):
+        self.total_students = total_students
+        self.chunks = chunks
+        self.primary = {}
+        self.replica = {}
+        self.metadata = {}
+        self.chunk_locks = {i: RWLock() for i in range(chunks)}
+        self._init_or_load()
+
+    def _init_or_load(self):
+        if not os.path.exists(PRIMARY_FILE):
+            self._init_dummy_data()
+        with open(PRIMARY_FILE, 'r') as f:
+            self.primary = json.load(f)
+        with open(REPLICA_FILE, 'r') as f:
+            self.replica = json.load(f)
+        with open(METADATA_FILE, 'r') as f:
+            self.metadata = json.load(f)
+
+    def _init_dummy_data(self):
+        # Use student_dataset from the main app
+        names = list(student_dataset.values())
+        primary = {}
+        for idx, roll_no in enumerate(student_dataset.keys()):
+            IAS = random.randint(10, 30)
+            MSE = random.randint(20, 30)
+            ESE = random.randint(30, 50)
+            total = IAS + MSE + ESE
+            primary[roll_no] = {
+                "roll": roll_no,
+                "name": names[idx],
+                "marks": {"IAS": IAS, "MSE": MSE, "ESE": ESE, "total": total}
+            }
+        replica = {k: dict(v) for k, v in primary.items()}
+        metadata = {"chunks": []}
+        size = len(student_dataset) // self.chunks
+        roll_nos = list(student_dataset.keys())
+        for i in range(self.chunks):
+            start = i * size
+            end = (i + 1) * size
+            metadata["chunks"].append({"id": i, "range": roll_nos[start:end]})
+        with open(PRIMARY_FILE, 'w') as f:
+            json.dump(primary, f, indent=2)
+        with open(REPLICA_FILE, 'w') as f:
+            json.dump(replica, f, indent=2)
+        with open(METADATA_FILE, 'w') as f:
+            json.dump(metadata, f, indent=2)
+
+    def _save(self):
+        with open(PRIMARY_FILE, 'w') as f:
+            json.dump(self.primary, f, indent=2)
+        with open(REPLICA_FILE, 'w') as f:
+            json.dump(self.replica, f, indent=2)
+
+    def _chunk_for_roll(self, roll):
+        roll_nos = list(student_dataset.keys())
+        idx = roll_nos.index(roll)
+        return idx // (self.total_students // self.chunks)
+
+# --- TASK 8 API ENDPOINTS ---
+@app.route("/read", methods=["GET"])
+def read_db():
+    roll = request.args.get("roll")
+    if not roll or roll not in processor_server.primary:
+        return jsonify({"error": "Roll not found"}), 404
+    cid = processor_server._chunk_for_roll(roll)
+    lock = processor_server.chunk_locks[cid]
+    if not lock.try_acquire_read():
+        return jsonify({"error": f"Roll {roll} is locked, try later"}), 423
+    try:
+        rec = processor_server.primary[roll]
+        socketio.emit('db_log', {'log': f"{roll} is READING (Chunk {cid}). Readers: {lock.readers}"})
+        return jsonify(rec), 200
+    finally:
+        lock.release_read()
+
+@app.route("/lock", methods=["POST"])
+def lock_db():
+    data = request.json
+    roll = str(data["roll"])
+    if roll not in processor_server.primary:
+        return jsonify({"error": f"Roll {roll} not found"}), 404
+    cid = processor_server._chunk_for_roll(roll)
+    lock = processor_server.chunk_locks[cid]
+    if not lock.try_acquire_write():
+        return jsonify({"error": f"Roll {roll} already locked"}), 423
+    return jsonify({"success": True, "msg": f"Roll {roll} locked for update"})
+
+@app.route("/unlock", methods=["POST"])
+def unlock_db():
+    data = request.json
+    roll = str(data["roll"])
+    if roll not in processor_server.primary:
+        return jsonify({"error": f"Roll {roll} not found"}), 404
+    cid = processor_server._chunk_for_roll(roll)
+    lock = processor_server.chunk_locks[cid]
+    lock.release_write()
+    return jsonify({"success": True, "msg": f"Roll {roll} unlocked"})
+
+@app.route("/write", methods=["POST"])
+def write_db():
+    data = request.json
+    roll = str(data["roll"])
+    new_marks = data["marks"]
+    if roll not in processor_server.primary:
+        return jsonify({"error": f"Roll {roll} not found"}), 404
+    cid = processor_server._chunk_for_roll(roll)
+    lock = processor_server.chunk_locks[cid]
+    if not lock.writer_active:
+        return jsonify({"error": f"Roll {roll} is not locked for update"}), 423
+    try:
+        rec = processor_server.primary[roll]
+        rec["marks"]["IAS"] = new_marks.get("IAS", rec["marks"]["IAS"])
+        rec["marks"]["MSE"] = new_marks.get("MSE", rec["marks"]["MSE"])
+        rec["marks"]["ESE"] = new_marks.get("ESE", rec["marks"]["ESE"])
+        rec["marks"]["total"] = (
+            rec["marks"]["IAS"] + rec["marks"]["MSE"] + rec["marks"]["ESE"]
+        )
+        processor_server.replica[roll] = dict(rec)
+        processor_server._save()
+        socketio.emit('db_log', {'log': f"{roll} is WRITING (Chunk {cid}). Writer active: {lock.writer_active}"})
+        socketio.emit('db_state', {
+            'primary': processor_server.primary,
+            'replica': processor_server.replica
+        })
+        return jsonify({"success": True, "record": rec})
+    finally:
+        lock.release_write()
+    # After every read or write
+    socketio.emit('db_state', {
+        'primary': processor_server.primary,
+        'replica': processor_server.replica
+    })
 
 # --- SOCKET.IO CONNECTION ---
 @socketio.on('connect')
@@ -283,5 +451,6 @@ def handle_connect():
 
 # --- MAIN EXECUTION BLOCK ---
 if __name__ == '__main__':
+    processor_server = ProcessorServer()
     print("Website running on http://127.0.0.1:5000")
     socketio.run(app, host='127.0.0.1', port=5000, debug=False, allow_unsafe_werkzeug=True)

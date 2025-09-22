@@ -63,20 +63,20 @@
     "roll": 7,
     "name": "Vikram Nair",
     "marks": {
-      "IAS": 22,
-      "MSE": 27,
-      "ESE": 35,
-      "total": 84
+      "IAS": 23,
+      "MSE": 22,
+      "ESE": 23,
+      "total": 68
     }
   },
   "8": {
     "roll": 8,
     "name": "Sneha Kulkarni",
     "marks": {
-      "IAS": 22,
-      "MSE": 30,
-      "ESE": 44,
-      "total": 96
+      "IAS": 23,
+      "MSE": 23,
+      "ESE": 23,
+      "total": 69
     }
   },
   "9": {

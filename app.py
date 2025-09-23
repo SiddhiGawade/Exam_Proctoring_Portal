@@ -28,7 +28,7 @@ student_dataset = {
 
 def reset_student_data():
     return {
-        roll_no: {'name': name, 'marks': 100, 'cheating_count': 0, 'exam_terminated': False}
+        roll_no: {'name': name, 'marks': 0, 'cheating_count': 0, 'exam_terminated': False}
         for roll_no, name in student_dataset.items()
     }
 
@@ -106,6 +106,10 @@ def backup_server_view():
 def replicated_db_view():
     return render_template('replicated_db.html')
 
+@app.route('/clock_sync')
+def clock_sync_view():
+    return render_template('clock_sync.html')
+
 
 # --- EXAM SUBMISSION API ENDPOINTS ---
 @app.route("/start_exam", methods=["POST"])
@@ -153,18 +157,32 @@ def auto_submit_all():
                     "name": student_dataset.get(sid, "Unknown")
                 }
                 StatusDB[sid] = True
+                # Update student marks in students_data for teacher's marksheet
+                if sid in students_data:
+                    students_data[sid]['marks'] = 0
         exam_active = False
     log_msg = "Exam ended. All pending submissions have been auto-submitted."
-    socketio.emit('main_log', {'log': log_msg})
+    socketio.emit('processor_log', {'log': log_msg})
     socketio.emit('exam_status', {'status': 'ended'})
     socketio.emit('submission_update', SubmissionDB)
+    socketio.emit('marks_update', list(students_data.items()))  # Update teacher's marksheet
 
 @app.route("/manual_submit", methods=["POST"])
 def manual_submit():
-    global c  # <-- Add this line
+    global c
     data = request.json
     sid = data["student_id"]
     answers = data["answers"]
+    
+    # Correct answers for MCQ questions (each worth 1 mark)
+    correct_answers = {
+        'q1': 'c',
+        'q2': 'c',
+        'q3': 'c',
+        'q4': 'b',
+        'q5': 'c'
+    }
+    
     with lock:
         if not exam_active:
             return jsonify({"error": "Exam not active"}), 400
@@ -172,7 +190,12 @@ def manual_submit():
             return jsonify({"error": "Unknown student"}), 400
         if StatusDB[sid]:
             return jsonify({"error": "Already submitted"}), 400
-        marks = len(answers)
+        
+        marks = 0
+        for question, student_answer in answers.items():
+            if question in correct_answers and student_answer == correct_answers[question]:
+                marks += 1
+        
         SubmissionDB[sid] = {
             "answers": answers,
             "auto": False,
@@ -181,21 +204,24 @@ def manual_submit():
             "name": student_dataset.get(sid, "Unknown")
         }
         StatusDB[sid] = True
-    log_msg = f"Student {sid} submitted exam manually. Marks: {marks}"
-    
+
+    # Load balancing check
     if c < 2:
+        log_msg = f"Student {sid} submitted exam manually. Marks: {marks} (Processed by MAIN)"
         socketio.emit('main_log', {'log': log_msg})
     else:
+        log_msg = f"Student {sid} submitted exam manually. Marks: {marks} (Processed by BACKUP)"
         socketio.emit('backup_log', {'log': log_msg})
-        log = f"Backup Handling: Student {sid} submission"
-        socketio.emit('main_log', {'log': log})
-    
-    c += 1  # <-- Add this line to increment c after each submission
-    
+        # Also notify on main which student migrated
+        socketio.emit('main_log', {'log': f"Student {sid} migrated to BACKUP server."})
+
+    c += 1  # Increment c after each submission
+
     socketio.emit('student_notification', {'message': f"Your exam has been submitted successfully.", 'type': 'success', 'timestamp': time.strftime('%H:%M:%S')})
     socketio.emit('submission_update', SubmissionDB)
     socketio.emit('submission_status_update', StatusDB)
-    return jsonify({"msg": "Submitted successfully"})
+    socketio.emit('marks_update', list(students_data.items()))
+    return jsonify({"msg": "Submitted successfully", "marks": marks})
 
 # --- TASK 7 Load Balancing Logic ---
 @app.route("/process_request", methods=["POST"])
@@ -460,8 +486,184 @@ def handle_connect():
     log_message = "A new client connected to the website."
     socketio.emit('processor_log', {'log': log_message})
 
+# --- CLOCK SYNCHRONIZATION SOCKET.IO EVENTS ---
+@socketio.on('start_berkeley_demo')
+def handle_start_berkeley():
+    global berkeley_active, berkeley_server_time, berkeley_clients
+    berkeley_active = True
+    berkeley_server_time = datetime.now().strftime('%H:%M:%S')
+    berkeley_clients = {}
+    
+    socketio.emit('berkeley_log', {'message': 'Berkeley Algorithm demonstration started'})
+    socketio.emit('berkeley_status_update', {
+        'server_time': berkeley_server_time,
+        'clients': []
+    })
+    
+    # Simulate client connections and CV calculations
+    def simulate_berkeley():
+        import time
+        time.sleep(2)
+        
+        # Step 1: Server broadcasts time
+        socketio.emit('berkeley_log', {'message': f'Step 1: Server broadcasts time {berkeley_server_time}'})
+        time.sleep(1)
+        
+        # Step 2-3: Clients calculate and send CVs
+        student_cv = random.randint(-30, 30)
+        teacher_cv = random.randint(-30, 30)
+        
+        berkeley_clients['Student'] = {'cv': student_cv}
+        berkeley_clients['Teacher'] = {'cv': teacher_cv}
+        
+        socketio.emit('berkeley_log', {'message': f'Step 2-3: Student CV = {student_cv}s, Teacher CV = {teacher_cv}s'})
+        socketio.emit('berkeley_status_update', {
+            'clients': [
+                {'name': 'Student', 'cv': student_cv},
+                {'name': 'Teacher', 'cv': teacher_cv}
+            ]
+        })
+        time.sleep(2)
+        
+        # Step 4: Calculate average
+        avg_cv = (student_cv + teacher_cv) / 2
+        socketio.emit('berkeley_log', {'message': f'Step 4: Average CV = {avg_cv:.2f}s'})
+        time.sleep(1)
+        
+        # Step 5: Calculate CAPs
+        student_cap = avg_cv - student_cv
+        teacher_cap = avg_cv - teacher_cv
+        socketio.emit('berkeley_log', {'message': f'Step 5: Student CAP = {student_cap:.2f}s, Teacher CAP = {teacher_cap:.2f}s'})
+        time.sleep(1)
+        
+        # Step 6-7: Clients adjust time
+        socketio.emit('berkeley_log', {'message': 'Step 6-7: Clients adjust their local time with CAP values'})
+        socketio.emit('berkeley_log', {'message': 'Berkeley synchronization completed successfully!'})
+    
+    thread = Thread(target=simulate_berkeley)
+    thread.daemon = True
+    thread.start()
+
+@socketio.on('stop_berkeley_demo')
+def handle_stop_berkeley():
+    global berkeley_active
+    berkeley_active = False
+    socketio.emit('berkeley_log', {'message': 'Berkeley Algorithm demonstration stopped'})
+
+@socketio.on('start_ricart_demo')
+def handle_start_ricart():
+    global ricart_active, ricart_processes
+    ricart_active = True
+    
+    # Reset process states
+    for process_id in ricart_processes:
+        ricart_processes[process_id] = {
+            'state': 'RELEASED', 
+            'clock': 0, 
+            'request_timestamp': float('inf')
+        }
+    
+    socketio.emit('ricart_log', {'message': 'Ricart-Agrawala demonstration started'})
+    socketio.emit('ricart_status_update', {
+        'processes': [
+            {'id': pid, 'state': data['state'], 'clock': data['clock']} 
+            for pid, data in ricart_processes.items()
+        ]
+    })
+    
+    # Simulate Ricart-Agrawala algorithm
+    def simulate_ricart():
+        import time
+        time.sleep(2)
+        
+        # Teacher requests critical section
+        ricart_processes['T']['state'] = 'WANTED'
+        ricart_processes['T']['clock'] = 1
+        ricart_processes['T']['request_timestamp'] = 1
+        
+        socketio.emit('ricart_log', {'message': 'Step 1-2: Teacher requests CS, broadcasts REQUEST(1, T)'})
+        socketio.emit('ricart_status_update', {
+            'processes': [
+                {'id': pid, 'state': data['state'], 'clock': data['clock']} 
+                for pid, data in ricart_processes.items()
+            ]
+        })
+        time.sleep(2)
+        
+        # Other processes respond
+        ricart_processes['S1']['clock'] = 2
+        ricart_processes['S2']['clock'] = 2
+        socketio.emit('ricart_log', {'message': 'Step 3-4: S1 and S2 receive request, send OK (not wanting CS)'})
+        time.sleep(2)
+        
+        # Teacher enters CS
+        ricart_processes['T']['state'] = 'HELD'
+        ricart_processes['T']['clock'] = 3
+        socketio.emit('ricart_log', {'message': 'Step 5-6: Teacher receives all OKs, enters Critical Section'})
+        socketio.emit('ricart_status_update', {
+            'processes': [
+                {'id': pid, 'state': data['state'], 'clock': data['clock']} 
+                for pid, data in ricart_processes.items()
+            ]
+        })
+        time.sleep(3)
+        
+        # Student 1 requests CS while Teacher is in CS
+        ricart_processes['S1']['state'] = 'WANTED'
+        ricart_processes['S1']['clock'] = 4
+        ricart_processes['S1']['request_timestamp'] = 4
+        socketio.emit('ricart_log', {'message': 'Student 1 requests CS, but Teacher is still in CS (request deferred)'})
+        socketio.emit('ricart_status_update', {
+            'processes': [
+                {'id': pid, 'state': data['state'], 'clock': data['clock']} 
+                for pid, data in ricart_processes.items()
+            ]
+        })
+        time.sleep(2)
+        
+        # Teacher releases CS
+        ricart_processes['T']['state'] = 'RELEASED'
+        ricart_processes['T']['clock'] = 5
+        ricart_processes['T']['request_timestamp'] = float('inf')
+        socketio.emit('ricart_log', {'message': 'Step 7: Teacher releases CS, sends OK to deferred requests'})
+        time.sleep(1)
+        
+        # Student 1 enters CS
+        ricart_processes['S1']['state'] = 'HELD'
+        ricart_processes['S1']['clock'] = 6
+        socketio.emit('ricart_log', {'message': 'Student 1 receives OK, enters Critical Section'})
+        socketio.emit('ricart_status_update', {
+            'processes': [
+                {'id': pid, 'state': data['state'], 'clock': data['clock']} 
+                for pid, data in ricart_processes.items()
+            ]
+        })
+        time.sleep(3)
+        
+        # Student 1 releases CS
+        ricart_processes['S1']['state'] = 'RELEASED'
+        ricart_processes['S1']['clock'] = 7
+        ricart_processes['S1']['request_timestamp'] = float('inf')
+        socketio.emit('ricart_log', {'message': 'Student 1 releases CS. Ricart-Agrawala demonstration completed!'})
+        socketio.emit('ricart_status_update', {
+            'processes': [
+                {'id': pid, 'state': data['state'], 'clock': data['clock']} 
+                for pid, data in ricart_processes.items()
+            ]
+        })
+    
+    thread = Thread(target=simulate_ricart)
+    thread.daemon = True
+    thread.start()
+
+@socketio.on('stop_ricart_demo')
+def handle_stop_ricart():
+    global ricart_active
+    ricart_active = False
+    socketio.emit('ricart_log', {'message': 'Ricart-Agrawala demonstration stopped'})
+
 # --- MAIN EXECUTION BLOCK ---
 if __name__ == '__main__':
     processor_server = ProcessorServer()
-    print("Website running on http://127.0.0.1:5000")
-    socketio.run(app, host='127.0.0.1', port=5000, debug=False, allow_unsafe_werkzeug=True)
+    print(f"Website running on http://127.0.0.1:{os.environ.get('PORT', 8080)}")
+    socketio.run(app, host='127.0.0.1', port=int(os.environ.get('PORT', 8080)), debug=False, allow_unsafe_werkzeug=True)

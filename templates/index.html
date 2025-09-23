@@ -10,7 +10,7 @@
     <style>
         body {
             font-family: 'Roboto', sans-serif;
-            background-color: #f0f2f5;
+            background-color: #f0f8ff;
             color: #333;
             display: flex;
             justify-content: center;
@@ -18,20 +18,21 @@
             height: 100vh;
             margin: 0;
             text-align: center;
-            background: linear-gradient(to right, #6a11cb 0%, #2575fc 100%);
+            background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 25%, #90caf9 50%, #64b5f6 75%, #42a5f5 100%);
         }
 
         .portal-container {
-            background-color: rgba(255, 255, 255, 0.9);
+            background-color: rgba(255, 255, 255, 0.95);
             padding: 40px 60px;
-            border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            border-radius: 20px;
+            box-shadow: 0 15px 35px rgba(33, 150, 243, 0.15);
             max-width: 600px;
             width: 90%;
             box-sizing: border-box;
             transform: scale(0.95);
             animation: slideIn 0.8s ease-out forwards;
-            backdrop-filter: blur(5px);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.7);
         }
 
         @keyframes slideIn {
@@ -49,15 +50,16 @@
             font-family: 'Montserrat', sans-serif;
             font-size: 2.5em;
             font-weight: 700;
-            color: #2c3e50;
+            color: #1565c0;
             margin-bottom: 5px;
+            text-shadow: 0 2px 4px rgba(21, 101, 192, 0.1);
         }
 
         .subtitle {
             font-family: 'Roboto', sans-serif;
             font-size: 1.4em;
             font-weight: 400;
-            color: #7f8c8d;
+            color: #546e7a;
             margin-top: 0;
             margin-bottom: 40px;
         }
@@ -70,41 +72,89 @@
         }
 
         .card {
-            background-color: rgba(255, 255, 255, 0.8);
-            border-radius: 12px;
+            background: linear-gradient(145deg, rgba(255, 255, 255, 0.95), rgba(248, 250, 252, 0.9));
+            border-radius: 15px;
             padding: 30px 20px;
             width: 150px;
             text-decoration: none;
-            color: #34495e;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-            transition: transform 0.3s ease, box-shadow 0.3s ease, background-color 0.3s ease;
+            color: #37474f;
+            box-shadow: 0 6px 20px rgba(33, 150, 243, 0.1);
+            transition: all 0.3s ease;
             position: relative;
-            border: 1px solid rgba(255, 255, 255, 0.5); /* Added a subtle border */
+            border: 1px solid rgba(33, 150, 243, 0.15);
+            overflow: hidden;
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(145deg, transparent, rgba(33, 150, 243, 0.05));
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .card:hover::before {
+            opacity: 1;
         }
 
         .card:hover {
-            transform: translateY(-8px);
-            box-shadow: 0 12px 25px rgba(0, 0, 0, 0.2);
-            background-color: rgba(255, 255, 255, 1); /* Opaque on hover */
+            transform: translateY(-10px) scale(1.02);
+            box-shadow: 0 15px 35px rgba(33, 150, 243, 0.25);
+            background: linear-gradient(145deg, rgba(255, 255, 255, 1), rgba(248, 250, 252, 0.95));
+            border: 1px solid rgba(33, 150, 243, 0.3);
         }
 
         .card-icon {
             font-size: 2.5em;
             margin-bottom: 10px;
+            display: inline-block;
+            animation: float 3s ease-in-out infinite;
+            position: relative;
+            z-index: 1;
+            transition: transform 0.3s ease;
         }
+
+        .card:hover .card-icon {
+            transform: scale(1.1) translateY(-2px);
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-5px); }
+        }
+
+        /* Add delay to each card's animation */
+        .card:nth-child(1) .card-icon { animation-delay: 0s; }
+        .card:nth-child(2) .card-icon { animation-delay: 0.2s; }
+        .card:nth-child(3) .card-icon { animation-delay: 0.4s; }
+        .card:nth-child(4) .card-icon { animation-delay: 0.6s; }
+        .card:nth-child(5) .card-icon { animation-delay: 0.8s; }
+        .card:nth-child(6) .card-icon { animation-delay: 1s; }
         
-        /* Specific colors for icons */
-        .card.teacher .card-icon { color: #f39c12; }
-        .card.student .card-icon { color: #27ae60; }
-        .card.processor .card-icon { color: #3498db; }
-        .card.backup .card-icon { color: #8e44ad; }
-        .card.replicated-db .card-icon { color: #f67280; } /* New color for Task 8 */
+        /* Specific colors for icons - Blue themed palette */
+        .card.teacher .card-icon { color: #ff7043; } /* Warm orange for teacher */
+        .card.student .card-icon { color: #42a5f5; } /* Light blue for student */
+        .card.processor .card-icon { color: #26c6da; } /* Cyan for processor */
+        .card.backup .card-icon { color: #ab47bc; } /* Purple for backup */
+        .card.replicated-db .card-icon { color: #66bb6a; } /* Green for replicated DB */
+        .card.clock-sync .card-icon { color: #5c6bc0; } /* Indigo for clock sync */
 
         .card-title {
             font-family: 'Montserrat', sans-serif;
             font-size: 1.2em;
             font-weight: 700;
             margin: 0;
+            position: relative;
+            z-index: 1;
+            transition: color 0.3s ease;
+        }
+
+        .card:hover .card-title {
+            color: #1565c0;
         }
 
         /* Responsive adjustments */
@@ -139,6 +189,10 @@
             <a href="/processor" class="card processor">
                 <span class="card-icon">⚙️</span>
                 <h3 class="card-title">Processor</h3>
+            </a>
+            <a href="/clock_sync" class="card clock-sync">
+                <span class="card-icon">🕐</span>
+                <h3 class="card-title">Clock Synchronization</h3>
             </a>
             <a href="/backup_server" class="card backup">
                 <span class="card-icon">💾</span>

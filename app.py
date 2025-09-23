@@ -39,6 +39,7 @@ exam_active = False
 exam_timer = None
 cheating_thread = None
 lock = Lock()
+c = 0  # <-- Add this line to initialize c
 
 # --- TASK 7 Load Balancing State ---
 PRIMARY_CAPACITY = 5
@@ -160,6 +161,7 @@ def auto_submit_all():
 
 @app.route("/manual_submit", methods=["POST"])
 def manual_submit():
+    global c  # <-- Add this line
     data = request.json
     sid = data["student_id"]
     answers = data["answers"]
@@ -180,7 +182,16 @@ def manual_submit():
         }
         StatusDB[sid] = True
     log_msg = f"Student {sid} submitted exam manually. Marks: {marks}"
-    socketio.emit('main_log', {'log': log_msg})
+    
+    if c < 2:
+        socketio.emit('main_log', {'log': log_msg})
+    else:
+        socketio.emit('backup_log', {'log': log_msg})
+        log = f"Backup Handling: Student {sid} submission"
+        socketio.emit('main_log', {'log': log})
+    
+    c += 1  # <-- Add this line to increment c after each submission
+    
     socketio.emit('student_notification', {'message': f"Your exam has been submitted successfully.", 'type': 'success', 'timestamp': time.strftime('%H:%M:%S')})
     socketio.emit('submission_update', SubmissionDB)
     socketio.emit('submission_status_update', StatusDB)

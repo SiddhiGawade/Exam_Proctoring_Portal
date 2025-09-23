@@ -674,5 +674,5 @@ def handle_stop_ricart():
 # --- MAIN EXECUTION BLOCK ---
 if __name__ == '__main__':
     processor_server = ProcessorServer()
-    print("Website running on http://127.0.0.1:5000")
-    socketio.run(app, host='127.0.0.1', port=5000, debug=False, allow_unsafe_werkzeug=True)
+    print(f"Website running on http://127.0.0.1:{os.environ.get('PORT', 8080)}")
+    socketio.run(app, host='127.0.0.1', port=int(os.environ.get('PORT', 8080)), debug=False, allow_unsafe_werkzeug=True)

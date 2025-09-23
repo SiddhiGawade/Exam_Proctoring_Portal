@@ -2,6 +2,7 @@ from xmlrpc.server import SimpleXMLRPCServer, SimpleXMLRPCRequestHandler
 from socketserver import ThreadingMixIn
 import xmlrpc.client, threading, time
 from datetime import datetime
+import os
 
 class ThreadedXMLRPCServer(ThreadingMixIn, SimpleXMLRPCServer):
     pass
@@ -60,7 +61,7 @@ def process_request(req_id):
 
 # ---------------- Run Server ----------------
 if __name__ == "__main__":
-    server = ThreadedXMLRPCServer(("0.0.0.0", 8600), requestHandler=RequestHandler, allow_none=True)
+    server = ThreadedXMLRPCServer(("0.0.0.0", int(os.environ.get('PORT', 8600))), requestHandler=RequestHandler, allow_none=True)
     server.register_function(process_request, "process_request")
     log_to_portal("Main Processor Server started and ready to receive requests.")
     try:

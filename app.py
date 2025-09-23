@@ -40,6 +40,22 @@ exam_timer = None
 cheating_thread = None
 lock = Lock()
 
+# --- CLOCK SYNCHRONIZATION GLOBAL VARIABLES ---
+# Berkeley Algorithm Variables
+berkeley_active = False
+berkeley_server_time = None
+berkeley_clients = {}  # {name: {cv: value, adjusted_time: time}}
+
+# Ricart-Agrawala Algorithm Variables
+ricart_active = False
+ricart_processes = {
+    'T': {'state': 'RELEASED', 'clock': 0, 'request_timestamp': float('inf')},
+    'S1': {'state': 'RELEASED', 'clock': 0, 'request_timestamp': float('inf')},
+    'S2': {'state': 'RELEASED', 'clock': 0, 'request_timestamp': float('inf')}
+}
+ricart_request_queue = []
+ricart_lock = Lock()
+
 # --- TASK 7 Load Balancing State ---
 PRIMARY_CAPACITY = 5
 BUFFER_SIZE = 5
@@ -104,6 +120,10 @@ def backup_server_view():
 @app.route('/replicated_db')
 def replicated_db_view():
     return render_template('replicated_db.html')
+
+@app.route('/clock_sync')
+def clock_sync_view():
+    return render_template('clock_sync.html')
 
 
 # --- EXAM SUBMISSION API ENDPOINTS ---
@@ -474,6 +494,182 @@ def write_db():
 def handle_connect():
     log_message = "A new client connected to the website."
     socketio.emit('processor_log', {'log': log_message})
+
+# --- CLOCK SYNCHRONIZATION SOCKET.IO EVENTS ---
+@socketio.on('start_berkeley_demo')
+def handle_start_berkeley():
+    global berkeley_active, berkeley_server_time, berkeley_clients
+    berkeley_active = True
+    berkeley_server_time = datetime.now().strftime('%H:%M:%S')
+    berkeley_clients = {}
+    
+    socketio.emit('berkeley_log', {'message': 'Berkeley Algorithm demonstration started'})
+    socketio.emit('berkeley_status_update', {
+        'server_time': berkeley_server_time,
+        'clients': []
+    })
+    
+    # Simulate client connections and CV calculations
+    def simulate_berkeley():
+        import time
+        time.sleep(2)
+        
+        # Step 1: Server broadcasts time
+        socketio.emit('berkeley_log', {'message': f'Step 1: Server broadcasts time {berkeley_server_time}'})
+        time.sleep(1)
+        
+        # Step 2-3: Clients calculate and send CVs
+        student_cv = random.randint(-30, 30)
+        teacher_cv = random.randint(-30, 30)
+        
+        berkeley_clients['Student'] = {'cv': student_cv}
+        berkeley_clients['Teacher'] = {'cv': teacher_cv}
+        
+        socketio.emit('berkeley_log', {'message': f'Step 2-3: Student CV = {student_cv}s, Teacher CV = {teacher_cv}s'})
+        socketio.emit('berkeley_status_update', {
+            'clients': [
+                {'name': 'Student', 'cv': student_cv},
+                {'name': 'Teacher', 'cv': teacher_cv}
+            ]
+        })
+        time.sleep(2)
+        
+        # Step 4: Calculate average
+        avg_cv = (student_cv + teacher_cv) / 2
+        socketio.emit('berkeley_log', {'message': f'Step 4: Average CV = {avg_cv:.2f}s'})
+        time.sleep(1)
+        
+        # Step 5: Calculate CAPs
+        student_cap = avg_cv - student_cv
+        teacher_cap = avg_cv - teacher_cv
+        socketio.emit('berkeley_log', {'message': f'Step 5: Student CAP = {student_cap:.2f}s, Teacher CAP = {teacher_cap:.2f}s'})
+        time.sleep(1)
+        
+        # Step 6-7: Clients adjust time
+        socketio.emit('berkeley_log', {'message': 'Step 6-7: Clients adjust their local time with CAP values'})
+        socketio.emit('berkeley_log', {'message': 'Berkeley synchronization completed successfully!'})
+    
+    thread = Thread(target=simulate_berkeley)
+    thread.daemon = True
+    thread.start()
+
+@socketio.on('stop_berkeley_demo')
+def handle_stop_berkeley():
+    global berkeley_active
+    berkeley_active = False
+    socketio.emit('berkeley_log', {'message': 'Berkeley Algorithm demonstration stopped'})
+
+@socketio.on('start_ricart_demo')
+def handle_start_ricart():
+    global ricart_active, ricart_processes
+    ricart_active = True
+    
+    # Reset process states
+    for process_id in ricart_processes:
+        ricart_processes[process_id] = {
+            'state': 'RELEASED', 
+            'clock': 0, 
+            'request_timestamp': float('inf')
+        }
+    
+    socketio.emit('ricart_log', {'message': 'Ricart-Agrawala demonstration started'})
+    socketio.emit('ricart_status_update', {
+        'processes': [
+            {'id': pid, 'state': data['state'], 'clock': data['clock']} 
+            for pid, data in ricart_processes.items()
+        ]
+    })
+    
+    # Simulate Ricart-Agrawala algorithm
+    def simulate_ricart():
+        import time
+        time.sleep(2)
+        
+        # Teacher requests critical section
+        ricart_processes['T']['state'] = 'WANTED'
+        ricart_processes['T']['clock'] = 1
+        ricart_processes['T']['request_timestamp'] = 1
+        
+        socketio.emit('ricart_log', {'message': 'Step 1-2: Teacher requests CS, broadcasts REQUEST(1, T)'})
+        socketio.emit('ricart_status_update', {
+            'processes': [
+                {'id': pid, 'state': data['state'], 'clock': data['clock']} 
+                for pid, data in ricart_processes.items()
+            ]
+        })
+        time.sleep(2)
+        
+        # Other processes respond
+        ricart_processes['S1']['clock'] = 2
+        ricart_processes['S2']['clock'] = 2
+        socketio.emit('ricart_log', {'message': 'Step 3-4: S1 and S2 receive request, send OK (not wanting CS)'})
+        time.sleep(2)
+        
+        # Teacher enters CS
+        ricart_processes['T']['state'] = 'HELD'
+        ricart_processes['T']['clock'] = 3
+        socketio.emit('ricart_log', {'message': 'Step 5-6: Teacher receives all OKs, enters Critical Section'})
+        socketio.emit('ricart_status_update', {
+            'processes': [
+                {'id': pid, 'state': data['state'], 'clock': data['clock']} 
+                for pid, data in ricart_processes.items()
+            ]
+        })
+        time.sleep(3)
+        
+        # Student 1 requests CS while Teacher is in CS
+        ricart_processes['S1']['state'] = 'WANTED'
+        ricart_processes['S1']['clock'] = 4
+        ricart_processes['S1']['request_timestamp'] = 4
+        socketio.emit('ricart_log', {'message': 'Student 1 requests CS, but Teacher is still in CS (request deferred)'})
+        socketio.emit('ricart_status_update', {
+            'processes': [
+                {'id': pid, 'state': data['state'], 'clock': data['clock']} 
+                for pid, data in ricart_processes.items()
+            ]
+        })
+        time.sleep(2)
+        
+        # Teacher releases CS
+        ricart_processes['T']['state'] = 'RELEASED'
+        ricart_processes['T']['clock'] = 5
+        ricart_processes['T']['request_timestamp'] = float('inf')
+        socketio.emit('ricart_log', {'message': 'Step 7: Teacher releases CS, sends OK to deferred requests'})
+        time.sleep(1)
+        
+        # Student 1 enters CS
+        ricart_processes['S1']['state'] = 'HELD'
+        ricart_processes['S1']['clock'] = 6
+        socketio.emit('ricart_log', {'message': 'Student 1 receives OK, enters Critical Section'})
+        socketio.emit('ricart_status_update', {
+            'processes': [
+                {'id': pid, 'state': data['state'], 'clock': data['clock']} 
+                for pid, data in ricart_processes.items()
+            ]
+        })
+        time.sleep(3)
+        
+        # Student 1 releases CS
+        ricart_processes['S1']['state'] = 'RELEASED'
+        ricart_processes['S1']['clock'] = 7
+        ricart_processes['S1']['request_timestamp'] = float('inf')
+        socketio.emit('ricart_log', {'message': 'Student 1 releases CS. Ricart-Agrawala demonstration completed!'})
+        socketio.emit('ricart_status_update', {
+            'processes': [
+                {'id': pid, 'state': data['state'], 'clock': data['clock']} 
+                for pid, data in ricart_processes.items()
+            ]
+        })
+    
+    thread = Thread(target=simulate_ricart)
+    thread.daemon = True
+    thread.start()
+
+@socketio.on('stop_ricart_demo')
+def handle_stop_ricart():
+    global ricart_active
+    ricart_active = False
+    socketio.emit('ricart_log', {'message': 'Ricart-Agrawala demonstration stopped'})
 
 # --- MAIN EXECUTION BLOCK ---
 if __name__ == '__main__':

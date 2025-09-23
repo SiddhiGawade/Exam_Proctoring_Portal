@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Clock Synchronization - Berkeley & Ricart-Agrawala</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .main-container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 30px;
+            margin: 20px auto;
+            max-width: 1200px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+        .algorithm-card {
+            background: linear-gradient(145deg, #f8f9fa, #e9ecef);
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 30px;
+            border: 1px solid #dee2e6;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .algorithm-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+        }
+        .step-card {
+            background: #ffffff;
+            border-left: 4px solid #007bff;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+        .step-number {
+            background: #007bff;
+            color: white;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        .berkeley-steps .step-card {
+            border-left-color: #28a745;
+        }
+        .berkeley-steps .step-number {
+            background: #28a745;
+        }
+        .ricart-steps .step-card {
+            border-left-color: #dc3545;
+        }
+        .ricart-steps .step-number {
+            background: #dc3545;
+        }
+        .demo-section {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        .client-info {
+            background: #e3f2fd;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        .server-info {
+            background: #fff3e0;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        .status-badge {
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: bold;
+        }
+        .status-idle {
+            background: #f8f9fa;
+            color: #6c757d;
+        }
+        .status-active {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status-waiting {
+            background: #fff3cd;
+            color: #856404;
+        }
+        .icon-large {
+            font-size: 2.5em;
+            margin-bottom: 15px;
+        }
+        .back-btn {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.9);
+            border: none;
+            border-radius: 50px;
+            padding: 10px 20px;
+            text-decoration: none;
+            color: #333;
+            font-weight: bold;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            transition: all 0.3s ease;
+        }
+        .back-btn:hover {
+            background: rgba(255, 255, 255, 1);
+            transform: translateY(-2px);
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <a href="/" class="back-btn">← Back to Portal</a>
+    
+    <div class="main-container">
+        <div class="text-center mb-5">
+            <h1 class="display-4 fw-bold text-primary">
+                <span class="icon-large">🕐</span><br>
+                Clock Synchronization
+            </h1>
+            <p class="lead text-muted">Berkeley Algorithm & Ricart-Agrawala Mutual Exclusion</p>
+        </div>
+
+        <!-- Berkeley Algorithm Section -->
+        <div class="algorithm-card">
+            <h2 class="text-success fw-bold mb-4">
+                <i class="bi bi-clock"></i> Task 4: Berkeley Algorithm
+            </h2>
+            <p class="text-muted mb-4">
+                A time synchronization algorithm where clients send their clock values to a master server,
+                which calculates adjustments to synchronize all clocks.
+            </p>
+            
+            <div class="berkeley-steps">
+                <div class="step-card">
+                    <span class="step-number">1</span>
+                    <strong>Server Time Broadcast:</strong> Server broadcasts its current time to all clients
+                </div>
+                <div class="step-card">
+                    <span class="step-number">2</span>
+                    <strong>Clock Value Calculation:</strong> Each client calculates CV (Clock Value) = Local Time - Server Time
+                </div>
+                <div class="step-card">
+                    <span class="step-number">3</span>
+                    <strong>CV Transmission:</strong> Clients send their CV values back to the server
+                </div>
+                <div class="step-card">
+                    <span class="step-number">4</span>
+                    <strong>Average Calculation:</strong> Server calculates the average of all received CVs
+                </div>
+                <div class="step-card">
+                    <span class="step-number">5</span>
+                    <strong>CAP Calculation:</strong> Server computes CAP (Clock Adjustment Parameter) = Average CV - Individual CV
+                </div>
+                <div class="step-card">
+                    <span class="step-number">6</span>
+                    <strong>Adjustment Broadcasting:</strong> Server sends CAP values to respective clients
+                </div>
+                <div class="step-card">
+                    <span class="step-number">7</span>
+                    <strong>Time Adjustment:</strong> Each client adjusts its local time using the received CAP
+                </div>
+            </div>
+
+            <div class="demo-section">
+                <h5 class="fw-bold mb-3">Berkeley Algorithm Demo Status</h5>
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="server-info">
+                            <h6 class="fw-bold">Server Status</h6>
+                            <p id="berkeley-server-status" class="mb-1">
+                                <span class="status-badge status-idle">Idle</span>
+                            </p>
+                            <small id="berkeley-server-time" class="text-muted">Server Time: --:--:--</small>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="client-info">
+                            <h6 class="fw-bold">Student Client</h6>
+                            <p id="berkeley-student-status" class="mb-1">
+                                <span class="status-badge status-idle">Disconnected</span>
+                            </p>
+                            <small id="berkeley-student-cv" class="text-muted">CV: --</small>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="client-info">
+                            <h6 class="fw-bold">Teacher Client</h6>
+                            <p id="berkeley-teacher-status" class="mb-1">
+                                <span class="status-badge status-idle">Disconnected</span>
+                            </p>
+                            <small id="berkeley-teacher-cv" class="text-muted">CV: --</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <button id="start-berkeley" class="btn btn-success">Start Berkeley Demo</button>
+                    <button id="stop-berkeley" class="btn btn-danger ms-2" disabled>Stop Demo</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Ricart-Agrawala Algorithm Section -->
+        <div class="algorithm-card">
+            <h2 class="text-danger fw-bold mb-4">
+                <i class="bi bi-shield-lock"></i> Task 5: Ricart-Agrawala Mutual Exclusion
+            </h2>
+            <p class="text-muted mb-4">
+                A distributed mutual exclusion algorithm using logical timestamps to ensure only one process 
+                can access the critical section (marksheet) at a time.
+            </p>
+            
+            <div class="ricart-steps">
+                <div class="step-card">
+                    <span class="step-number">1</span>
+                    <strong>Request Critical Section:</strong> Process wants to enter critical section, sets state to WANTED
+                </div>
+                <div class="step-card">
+                    <span class="step-number">2</span>
+                    <strong>Broadcast REQUEST:</strong> Send REQUEST(timestamp, process_id) to all other processes
+                </div>
+                <div class="step-card">
+                    <span class="step-number">3</span>
+                    <strong>Receive REQUEST:</strong> Other processes receive request and decide whether to grant permission
+                </div>
+                <div class="step-card">
+                    <span class="step-number">4</span>
+                    <strong>Permission Logic:</strong> Grant OK if: not in CS, not wanting CS, or requesting process has higher priority
+                </div>
+                <div class="step-card">
+                    <span class="step-number">5</span>
+                    <strong>Collect OKs:</strong> Requesting process waits for OK messages from all other processes
+                </div>
+                <div class="step-card">
+                    <span class="step-number">6</span>
+                    <strong>Enter Critical Section:</strong> When all OKs received, process enters critical section (HELD state)
+                </div>
+                <div class="step-card">
+                    <span class="step-number">7</span>
+                    <strong>Release & Reply:</strong> After exiting CS, process replies to all deferred requests
+                </div>
+            </div>
+
+            <div class="demo-section">
+                <h5 class="fw-bold mb-3">Ricart-Agrawala Demo Status</h5>
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="client-info">
+                            <h6 class="fw-bold">Teacher Process</h6>
+                            <p id="ricart-teacher-status" class="mb-1">
+                                <span class="status-badge status-idle">RELEASED</span>
+                            </p>
+                            <small id="ricart-teacher-clock" class="text-muted">Clock: 0</small>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="client-info">
+                            <h6 class="fw-bold">Student 1 Process</h6>
+                            <p id="ricart-s1-status" class="mb-1">
+                                <span class="status-badge status-idle">RELEASED</span>
+                            </p>
+                            <small id="ricart-s1-clock" class="text-muted">Clock: 0</small>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="client-info">
+                            <h6 class="fw-bold">Student 2 Process</h6>
+                            <p id="ricart-s2-status" class="mb-1">
+                                <span class="status-badge status-idle">RELEASED</span>
+                            </p>
+                            <small id="ricart-s2-clock" class="text-muted">Clock: 0</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <button id="start-ricart" class="btn btn-danger">Start Ricart Demo</button>
+                    <button id="stop-ricart" class="btn btn-secondary ms-2" disabled>Stop Demo</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Live Logs Section -->
+        <div class="algorithm-card">
+            <h3 class="fw-bold mb-3">
+                <i class="bi bi-terminal"></i> Live Algorithm Logs
+            </h3>
+            <div id="algorithm-logs" style="background: #2d3748; color: #e2e8f0; border-radius: 8px; padding: 20px; height: 300px; overflow-y: auto; font-family: 'Courier New', monospace;">
+                <div class="text-muted">Waiting for algorithm demonstrations to start...</div>
+            </div>
+            <div class="mt-3">
+                <button id="clear-logs" class="btn btn-outline-secondary btn-sm">Clear Logs</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', (event) => {
+            const socket = io();
+            const logsDiv = document.getElementById('algorithm-logs');
+            
+            // Berkeley Algorithm Status Elements
+            const berkeleyServerStatus = document.getElementById('berkeley-server-status');
+            const berkeleyServerTime = document.getElementById('berkeley-server-time');
+            const berkeleyStudentStatus = document.getElementById('berkeley-student-status');
+            const berkeleyStudentCV = document.getElementById('berkeley-student-cv');
+            const berkeleyTeacherStatus = document.getElementById('berkeley-teacher-status');
+            const berkeleyTeacherCV = document.getElementById('berkeley-teacher-cv');
+            
+            // Ricart Algorithm Status Elements
+            const ricartTeacherStatus = document.getElementById('ricart-teacher-status');
+            const ricartTeacherClock = document.getElementById('ricart-teacher-clock');
+            const ricartS1Status = document.getElementById('ricart-s1-status');
+            const ricartS1Clock = document.getElementById('ricart-s1-clock');
+            const ricartS2Status = document.getElementById('ricart-s2-status');
+            const ricartS2Clock = document.getElementById('ricart-s2-clock');
+
+            // Button Elements
+            const startBerkeleyBtn = document.getElementById('start-berkeley');
+            const stopBerkeleyBtn = document.getElementById('stop-berkeley');
+            const startRicartBtn = document.getElementById('start-ricart');
+            const stopRicartBtn = document.getElementById('stop-ricart');
+            const clearLogsBtn = document.getElementById('clear-logs');
+
+            function addLog(message, type = 'info') {
+                const timestamp = new Date().toLocaleTimeString();
+                const logEntry = document.createElement('div');
+                logEntry.style.marginBottom = '5px';
+                
+                let color = '#e2e8f0';
+                if (type === 'berkeley') color = '#48bb78';
+                else if (type === 'ricart') color = '#f56565';
+                else if (type === 'error') color = '#fc8181';
+                else if (type === 'success') color = '#68d391';
+                
+                logEntry.innerHTML = `<span style="color: #a0aec0;">[${timestamp}]</span> <span style="color: ${color};">${message}</span>`;
+                logsDiv.appendChild(logEntry);
+                logsDiv.scrollTop = logsDiv.scrollHeight;
+            }
+
+            function updateStatusBadge(element, status, type = 'idle') {
+                const badge = element.querySelector('.status-badge');
+                badge.textContent = status;
+                badge.className = `status-badge status-${type}`;
+            }
+
+            // Socket event listeners
+            socket.on('connect', () => {
+                addLog('Connected to Clock Synchronization server', 'success');
+            });
+
+            socket.on('berkeley_log', (data) => {
+                addLog(`[BERKELEY] ${data.message}`, 'berkeley');
+            });
+
+            socket.on('ricart_log', (data) => {
+                addLog(`[RICART] ${data.message}`, 'ricart');
+            });
+
+            socket.on('berkeley_status_update', (data) => {
+                if (data.server_time) {
+                    berkeleyServerTime.textContent = `Server Time: ${data.server_time}`;
+                    updateStatusBadge(berkeleyServerStatus, 'Broadcasting', 'active');
+                }
+                
+                if (data.clients) {
+                    data.clients.forEach(client => {
+                        if (client.name === 'Student') {
+                            updateStatusBadge(berkeleyStudentStatus, 'Connected', 'active');
+                            berkeleyStudentCV.textContent = `CV: ${client.cv || '--'}`;
+                        } else if (client.name === 'Teacher') {
+                            updateStatusBadge(berkeleyTeacherStatus, 'Connected', 'active');
+                            berkeleyTeacherCV.textContent = `CV: ${client.cv || '--'}`;
+                        }
+                    });
+                }
+            });
+
+            socket.on('ricart_status_update', (data) => {
+                if (data.processes) {
+                    data.processes.forEach(process => {
+                        let statusElement, clockElement;
+                        if (process.id === 'T') {
+                            statusElement = ricartTeacherStatus;
+                            clockElement = ricartTeacherClock;
+                        } else if (process.id === 'S1') {
+                            statusElement = ricartS1Status;
+                            clockElement = ricartS1Clock;
+                        } else if (process.id === 'S2') {
+                            statusElement = ricartS2Status;
+                            clockElement = ricartS2Clock;
+                        }
+                        
+                        if (statusElement && clockElement) {
+                            let type = 'idle';
+                            if (process.state === 'WANTED') type = 'waiting';
+                            else if (process.state === 'HELD') type = 'active';
+                            
+                            updateStatusBadge(statusElement, process.state, type);
+                            clockElement.textContent = `Clock: ${process.clock}`;
+                        }
+                    });
+                }
+            });
+
+            // Button event handlers
+            startBerkeleyBtn.addEventListener('click', () => {
+                socket.emit('start_berkeley_demo');
+                startBerkeleyBtn.disabled = true;
+                stopBerkeleyBtn.disabled = false;
+                addLog('Starting Berkeley Algorithm demonstration...', 'berkeley');
+            });
+
+            stopBerkeleyBtn.addEventListener('click', () => {
+                socket.emit('stop_berkeley_demo');
+                startBerkeleyBtn.disabled = false;
+                stopBerkeleyBtn.disabled = true;
+                addLog('Stopping Berkeley Algorithm demonstration...', 'berkeley');
+            });
+
+            startRicartBtn.addEventListener('click', () => {
+                socket.emit('start_ricart_demo');
+                startRicartBtn.disabled = true;
+                stopRicartBtn.disabled = false;
+                addLog('Starting Ricart-Agrawala demonstration...', 'ricart');
+            });
+
+            stopRicartBtn.addEventListener('click', () => {
+                socket.emit('stop_ricart_demo');
+                startRicartBtn.disabled = false;
+                stopRicartBtn.disabled = true;
+                addLog('Stopping Ricart-Agrawala demonstration...', 'ricart');
+            });
+
+            clearLogsBtn.addEventListener('click', () => {
+                logsDiv.innerHTML = '<div class="text-muted">Logs cleared...</div>';
+            });
+        });
+    </script>
+</body>
+</html>

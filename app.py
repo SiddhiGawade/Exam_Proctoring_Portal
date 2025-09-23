@@ -42,8 +42,8 @@ lock = Lock()
 c = 0  # <-- Add this line to initialize c
 
 # --- TASK 7 Load Balancing State ---
-PRIMARY_CAPACITY = 5
-BUFFER_SIZE = 5
+PRIMARY_CAPACITY = 1
+BUFFER_SIZE = 1
 main_processor_requests_count = 0
 main_processor_buffer = []
 main_processor_lock = Lock()
@@ -169,12 +169,11 @@ def auto_submit_all():
 
 @app.route("/manual_submit", methods=["POST"])
 def manual_submit():
-    global c
+    global main_processor_requests_count, main_processor_buffer
     data = request.json
     sid = data["student_id"]
     answers = data["answers"]
-    
-    # Correct answers for MCQ questions (each worth 1 mark)
+
     correct_answers = {
         'q1': 'c',
         'q2': 'c',
@@ -182,7 +181,7 @@ def manual_submit():
         'q4': 'b',
         'q5': 'c'
     }
-    
+
     with lock:
         if not exam_active:
             return jsonify({"error": "Exam not active"}), 400
@@ -190,12 +189,12 @@ def manual_submit():
             return jsonify({"error": "Unknown student"}), 400
         if StatusDB[sid]:
             return jsonify({"error": "Already submitted"}), 400
-        
-        marks = 0
-        for question, student_answer in answers.items():
-            if question in correct_answers and student_answer == correct_answers[question]:
-                marks += 1
-        
+
+        marks = sum(
+            1 for question, student_answer in answers.items()
+            if question in correct_answers and student_answer == correct_answers[question]
+        )
+
         SubmissionDB[sid] = {
             "answers": answers,
             "auto": False,
@@ -205,17 +204,25 @@ def manual_submit():
         }
         StatusDB[sid] = True
 
-    # Load balancing check
-    if c < 2:
+    # Load balancing logic using PRIMARY_CAPACITY and BUFFER_SIZE
+    if main_processor_requests_count < PRIMARY_CAPACITY:
         log_msg = f"Student {sid} submitted exam manually. Marks: {marks} (Processed by MAIN)"
         socketio.emit('main_log', {'log': log_msg})
+        main_processor_requests_count += 1
     else:
-        log_msg = f"Student {sid} submitted exam manually. Marks: {marks} (Processed by BACKUP)"
-        socketio.emit('backup_log', {'log': log_msg})
-        # Also notify on main which student migrated
-        socketio.emit('main_log', {'log': f"Student {sid} migrated to BACKUP server."})
-
-    c += 1  # Increment c after each submission
+        main_processor_buffer.append(sid)
+        log_msg = f"Student {sid} buffered for BACKUP. Buffer size: {len(main_processor_buffer)}/{BUFFER_SIZE}"
+        socketio.emit('main_log', {'log': log_msg})
+        if len(main_processor_buffer) == BUFFER_SIZE:
+            # Send batch to backup server
+            try:
+                backup = xmlrpc.client.ServerProxy("http://127.0.0.1:8601/RPC2", allow_none=True)
+                resp = backup.process_batch(main_processor_buffer)
+                socketio.emit('backup_log', {'log': f"Backup processed students: {main_processor_buffer}. Marks: {marks}"})
+                socketio.emit('main_log', {'log': f"Students migrated to BACKUP: {main_processor_buffer}"})
+            except Exception as e:
+                socketio.emit('main_log', {'log': f"ERROR: Could not reach backup server. {e}"})
+            main_processor_buffer.clear()
 
     socketio.emit('student_notification', {'message': f"Your exam has been submitted successfully.", 'type': 'success', 'timestamp': time.strftime('%H:%M:%S')})
     socketio.emit('submission_update', SubmissionDB)

@@ -28,7 +28,7 @@ student_dataset = {
 
 def reset_student_data():
     return {
-        roll_no: {'name': name, 'marks': 100, 'cheating_count': 0, 'exam_terminated': False}
+        roll_no: {'name': name, 'marks': 0, 'cheating_count': 0, 'exam_terminated': False}
         for roll_no, name in student_dataset.items()
     }
 
@@ -152,17 +152,31 @@ def auto_submit_all():
                     "name": student_dataset.get(sid, "Unknown")
                 }
                 StatusDB[sid] = True
+                # Update student marks in students_data for teacher's marksheet
+                if sid in students_data:
+                    students_data[sid]['marks'] = 0
         exam_active = False
     log_msg = "Exam ended. All pending submissions have been auto-submitted."
-    socketio.emit('main_log', {'log': log_msg})
+    socketio.emit('processor_log', {'log': log_msg})
     socketio.emit('exam_status', {'status': 'ended'})
     socketio.emit('submission_update', SubmissionDB)
+    socketio.emit('marks_update', list(students_data.items()))  # Update teacher's marksheet
 
 @app.route("/manual_submit", methods=["POST"])
 def manual_submit():
     data = request.json
     sid = data["student_id"]
     answers = data["answers"]
+    
+    # Correct answers for MCQ questions (each worth 1 mark)
+    correct_answers = {
+        'q1': 'c',  # Distributed Systems
+        'q2': 'c',  # Components are located on separate machines and communicate over a network
+        'q3': 'c',  # Increased reliability and scalability
+        'q4': 'b',  # Maintaining perfect clock synchronization across all machines
+        'q5': 'c'   # The World Wide Web
+    }
+    
     with lock:
         if not exam_active:
             return jsonify({"error": "Exam not active"}), 400
@@ -170,7 +184,13 @@ def manual_submit():
             return jsonify({"error": "Unknown student"}), 400
         if StatusDB[sid]:
             return jsonify({"error": "Already submitted"}), 400
-        marks = len(answers)
+        
+        # Calculate marks based on correct answers
+        marks = 0
+        for question, student_answer in answers.items():
+            if question in correct_answers and student_answer == correct_answers[question]:
+                marks += 1
+        
         SubmissionDB[sid] = {
             "answers": answers,
             "auto": False,
@@ -179,12 +199,18 @@ def manual_submit():
             "name": student_dataset.get(sid, "Unknown")
         }
         StatusDB[sid] = True
-    log_msg = f"Student {sid} submitted exam manually. Marks: {marks}"
-    socketio.emit('main_log', {'log': log_msg})
-    socketio.emit('student_notification', {'message': f"Your exam has been submitted successfully.", 'type': 'success', 'timestamp': time.strftime('%H:%M:%S')})
+        
+        # Update student marks in students_data for teacher's marksheet
+        if sid in students_data:
+            students_data[sid]['marks'] = marks
+    
+    log_msg = f"Student {sid} submitted exam manually. Marks: {marks}/5"
+    socketio.emit('processor_log', {'log': log_msg})
+    socketio.emit('student_notification', {'message': f"Your exam has been submitted successfully. Marks: {marks}/5", 'type': 'success', 'timestamp': time.strftime('%H:%M:%S')})
     socketio.emit('submission_update', SubmissionDB)
     socketio.emit('submission_status_update', StatusDB)
-    return jsonify({"msg": "Submitted successfully"})
+    socketio.emit('marks_update', list(students_data.items()))  # Update teacher's marksheet
+    return jsonify({"msg": "Submitted successfully", "marks": marks})
 
 # --- TASK 7 Load Balancing Logic ---
 @app.route("/process_request", methods=["POST"])

@@ -1,282 +1,102 @@
 {
-  "1": {
-    "roll": 1,
-    "name": "Amit Sharma",
-    "marks": {
-      "IAS": 16,
-      "MSE": 25,
-      "ESE": 45,
-      "total": 86
+    "24102A2001": {
+        "roll": "24102A2001",
+        "name": "SIDDHI GAWADE",
+        "marks": {
+            "IAS": 12,
+            "MSE": 25,
+            "ESE": 41,
+            "total": 78
+        }
+    },
+    "24102A2002": {
+        "roll": "24102A2002",
+        "name": "SANDEEP MAJUMDAR",
+        "marks": {
+            "IAS": 11,
+            "MSE": 26,
+            "ESE": 38,
+            "total": 75
+        }
+    },
+    "24102A2003": {
+        "roll": "24102A2003",
+        "name": "CHIRAG CHAUDHARI",
+        "marks": {
+            "IAS": 30,
+            "MSE": 23,
+            "ESE": 41,
+            "total": 94
+        }
+    },
+    "24102A2004": {
+        "roll": "24102A2004",
+        "name": "ANUSHKA UNDE",
+        "marks": {
+            "IAS": 10,
+            "MSE": 21,
+            "ESE": 46,
+            "total": 77
+        }
+    },
+    "24102A2005": {
+        "roll": "24102A2005",
+        "name": "SHAZIYA SHAIKH",
+        "marks": {
+            "IAS": 19,
+            "MSE": 21,
+            "ESE": 41,
+            "total": 81
+        }
+    },
+    "24102A2006": {
+        "roll": "24102A2006",
+        "name": "TAMANNA SHAIKH",
+        "marks": {
+            "IAS": 23,
+            "MSE": 27,
+            "ESE": 27,
+            "total": 77
+        }
+    },
+    "24102A2007": {
+        "roll": "24102A2007",
+        "name": "TANSHIQ KULKARNI",
+        "marks": {
+            "IAS": 25,
+            "MSE": 24,
+            "ESE": 42,
+            "total": 91
+        }
+    },
+    "24102A2008": {
+        "roll": "24102A2008",
+        "name": "ARAV MAHIND",
+        "marks": {
+            "IAS": 25,
+            "MSE": 25,
+            "ESE": 48,
+            "total": 87
+        }
+    },
+    "24102A2009": {
+        "roll": "24102A2009",
+        "name": "PREM DESHMUKH",
+        "marks": {
+            "IAS": 29,
+            "MSE": 20,
+            "ESE": 44,
+            "total": 93
+        }
+    },
+    "24102A2010": {
+        "roll": "24102A2010",
+        "name": "ISHA BANSAL",
+        "marks": {
+            "IAS": 27,
+            "MSE": 30,
+            "ESE": 46,
+            "total": 103
+        }
     }
-  },
-  "2": {
-    "roll": 2,
-    "name": "Priya Singh",
-    "marks": {
-      "IAS": 10,
-      "MSE": 30,
-      "ESE": 38,
-      "total": 78
-    }
-  },
-  "3": {
-    "roll": 3,
-    "name": "Rahul Verma",
-    "marks": {
-      "IAS": 28,
-      "MSE": 22,
-      "ESE": 45,
-      "total": 95
-    }
-  },
-  "4": {
-    "roll": 4,
-    "name": "Neha Patel",
-    "marks": {
-      "IAS": 30,
-      "MSE": 30,
-      "ESE": 45,
-      "total": 105
-    }
-  },
-  "5": {
-    "roll": 5,
-    "name": "Karan Mehta",
-    "marks": {
-      "IAS": 15,
-      "MSE": 25,
-      "ESE": 30,
-      "total": 70
-    }
-  },
-  "6": {
-    "roll": 6,
-    "name": "Riya Das",
-    "marks": {
-      "IAS": 27,
-      "MSE": 25,
-      "ESE": 40,
-      "total": 92
-    }
-  },
-  "7": {
-    "roll": 7,
-    "name": "Vikram Nair",
-    "marks": {
-      "IAS": 23,
-      "MSE": 22,
-      "ESE": 23,
-      "total": 68
-    }
-  },
-  "8": {
-    "roll": 8,
-    "name": "Sneha Kulkarni",
-    "marks": {
-      "IAS": 23,
-      "MSE": 23,
-      "ESE": 23,
-      "total": 69
-    }
-  },
-  "9": {
-    "roll": 9,
-    "name": "Aditya Joshi",
-    "marks": {
-      "IAS": 24,
-      "MSE": 20,
-      "ESE": 33,
-      "total": 77
-    }
-  },
-  "10": {
-    "roll": 10,
-    "name": "Meena Rao",
-    "marks": {
-      "IAS": 10,
-      "MSE": 26,
-      "ESE": 33,
-      "total": 69
-    }
-  },
-  "11": {
-    "roll": 11,
-    "name": "Suresh Iyer",
-    "marks": {
-      "IAS": 30,
-      "MSE": 21,
-      "ESE": 30,
-      "total": 81
-    }
-  },
-  "12": {
-    "roll": 12,
-    "name": "Ananya Gupta",
-    "marks": {
-      "IAS": 24,
-      "MSE": 30,
-      "ESE": 40,
-      "total": 94
-    }
-  },
-  "13": {
-    "roll": 13,
-    "name": "Rohan Mishra",
-    "marks": {
-      "IAS": 23,
-      "MSE": 27,
-      "ESE": 40,
-      "total": 90
-    }
-  },
-  "14": {
-    "roll": 14,
-    "name": "Pooja Yadav",
-    "marks": {
-      "IAS": 12,
-      "MSE": 27,
-      "ESE": 47,
-      "total": 86
-    }
-  },
-  "15": {
-    "roll": 15,
-    "name": "Arjun Kapoor",
-    "marks": {
-      "IAS": 16,
-      "MSE": 28,
-      "ESE": 42,
-      "total": 86
-    }
-  },
-  "16": {
-    "roll": 16,
-    "name": "Divya Reddy",
-    "marks": {
-      "IAS": 25,
-      "MSE": 29,
-      "ESE": 31,
-      "total": 85
-    }
-  },
-  "17": {
-    "roll": 17,
-    "name": "Manish Kumar",
-    "marks": {
-      "IAS": 23,
-      "MSE": 25,
-      "ESE": 35,
-      "total": 83
-    }
-  },
-  "18": {
-    "roll": 18,
-    "name": "Shruti Menon",
-    "marks": {
-      "IAS": 10,
-      "MSE": 28,
-      "ESE": 50,
-      "total": 88
-    }
-  },
-  "19": {
-    "roll": 19,
-    "name": "Deepak Jha",
-    "marks": {
-      "IAS": 26,
-      "MSE": 20,
-      "ESE": 43,
-      "total": 89
-    }
-  },
-  "20": {
-    "roll": 20,
-    "name": "Sunita Chauhan",
-    "marks": {
-      "IAS": 11,
-      "MSE": 20,
-      "ESE": 42,
-      "total": 73
-    }
-  },
-  "21": {
-    "roll": 21,
-    "name": "Harsh Vora",
-    "marks": {
-      "IAS": 18,
-      "MSE": 25,
-      "ESE": 35,
-      "total": 78
-    }
-  },
-  "22": {
-    "roll": 22,
-    "name": "Nidhi Saxena",
-    "marks": {
-      "IAS": 11,
-      "MSE": 22,
-      "ESE": 43,
-      "total": 76
-    }
-  },
-  "23": {
-    "roll": 23,
-    "name": "Mohit Bansal",
-    "marks": {
-      "IAS": 21,
-      "MSE": 20,
-      "ESE": 38,
-      "total": 79
-    }
-  },
-  "24": {
-    "roll": 24,
-    "name": "Tanvi Pillai",
-    "marks": {
-      "IAS": 12,
-      "MSE": 27,
-      "ESE": 36,
-      "total": 75
-    }
-  },
-  "25": {
-    "roll": 25,
-    "name": "Aakash Yadav",
-    "marks": {
-      "IAS": 21,
-      "MSE": 27,
-      "ESE": 37,
-      "total": 85
-    }
-  },
-  "26": {
-    "roll": 26,
-    "name": "Shreya Nair",
-    "marks": {
-      "IAS": 26,
-      "MSE": 28,
-      "ESE": 46,
-      "total": 100
-    }
-  },
-  "27": {
-    "roll": 27,
-    "name": "Anil Sharma",
-    "marks": {
-      "IAS": 16,
-      "MSE": 30,
-      "ESE": 30,
-      "total": 76
-    }
-  },
-  "28": {
-    "roll": 28,
-    "name": "Kavita Rao",
-    "marks": {
-      "IAS": 28,
-      "MSE": 28,
-      "ESE": 39,
-      "total": 95
-    }
-  }
 }

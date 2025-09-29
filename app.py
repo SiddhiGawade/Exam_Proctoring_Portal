@@ -39,9 +39,8 @@ exam_active = False
 exam_timer = None
 cheating_thread = None
 lock = Lock()
-c = 0  # <-- Add this line to initialize c
+c = 0
 
-# --- TASK 7 Load Balancing State ---
 PRIMARY_CAPACITY = 1
 BUFFER_SIZE = 1
 main_processor_requests_count = 0
@@ -673,4 +672,4 @@ def handle_stop_ricart():
 if __name__ == '__main__':
     processor_server = ProcessorServer()
     print(f"Website running on http://127.0.0.1:{os.environ.get('PORT', 8080)}")
-    socketio.run(app, host='127.0.0.1', port=int(os.environ.get('PORT', 8080)), debug=False, allow_unsafe_werkzeug=True)
+    socketio.run(app, host='0.0.0.0', port=int(os.environ.get('PORT', 8080)), debug=False, allow_unsafe_werkzeug=True)

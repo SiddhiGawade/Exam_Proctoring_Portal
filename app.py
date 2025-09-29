@@ -28,7 +28,7 @@ student_dataset = {
 
 def reset_student_data():
     return {
-        roll_no: {'name': name, 'marks': 0, 'cheating_count': 0, 'exam_terminated': False}
+        roll_no: {'name': name, 'marks': 100, 'cheating_count': 0, 'exam_terminated': False}
         for roll_no, name in student_dataset.items()
     }
 
@@ -40,6 +40,17 @@ exam_timer = None
 cheating_thread = None
 lock = Lock()
 c = 0  # <-- Add this line to initialize c
+
+# --- Global state for demos (to avoid NameError) ---
+berkeley_active = False
+berkeley_server_time = None
+berkeley_clients = {}
+ricart_active = False
+ricart_processes = {
+    'T': {'state': 'RELEASED', 'clock': 0, 'request_timestamp': float('inf')},
+    'S1': {'state': 'RELEASED', 'clock': 0, 'request_timestamp': float('inf')},
+    'S2': {'state': 'RELEASED', 'clock': 0, 'request_timestamp': float('inf')},
+}
 
 # --- TASK 7 Load Balancing State ---
 PRIMARY_CAPACITY = 1
@@ -54,6 +65,7 @@ PRIMARY_FILE = "primary_db.json"
 REPLICA_FILE = "replica_db.json"
 METADATA_FILE = "metadata.json"
 processor_server = None
+cursors = {}
 
 # --- RPC Endpoints for receiving logs from processors ---
 class RequestHandler(SimpleXMLRPCRequestHandler):
@@ -152,14 +164,19 @@ def auto_submit_all():
                 SubmissionDB[sid] = {
                     "answers": {},
                     "auto": True,
-                    "marks": 0,
+                    "marks": students_data.get(sid, {}).get('marks', 0),
                     "submitted_at": datetime.now().isoformat(),
                     "name": student_dataset.get(sid, "Unknown")
                 }
                 StatusDB[sid] = True
                 # Update student marks in students_data for teacher's marksheet
-                if sid in students_data:
-                    students_data[sid]['marks'] = 0
+                # keep current marks as-is (100/50/0 based on cheating)
+        # Persist the latest marks to replicated DBs for all students
+        try:
+            for sid, data in students_data.items():
+                _update_replicated_db_exam_mark(sid, data.get('marks', 0))
+        except Exception:
+            pass
         exam_active = False
     log_msg = "Exam ended. All pending submissions have been auto-submitted."
     socketio.emit('processor_log', {'log': log_msg})
@@ -190,10 +207,8 @@ def manual_submit():
         if StatusDB[sid]:
             return jsonify({"error": "Already submitted"}), 400
 
-        marks = sum(
-            1 for question, student_answer in answers.items()
-            if question in correct_answers and student_answer == correct_answers[question]
-        )
+        # Align submission marks with live exam marks (100/50/0 based on cheating)
+        marks = students_data.get(sid, {}).get('marks', 0)
 
         SubmissionDB[sid] = {
             "answers": answers,
@@ -286,7 +301,8 @@ def cheating_simulation():
             socketio.emit('processor_log', {'log': log_message})
             break
         active_students = [
-            roll_no for roll_no, data in students_data.items() if not data['exam_terminated']
+            roll_no for roll_no, data in students_data.items()
+            if not data['exam_terminated'] and not StatusDB.get(roll_no, False)
         ]
         if not active_students:
             log_message = "All student exams have been terminated. Simulation stopped."
@@ -297,7 +313,7 @@ def cheating_simulation():
         student['cheating_count'] += 1
         notification_for_student = {}
         if student['cheating_count'] == 1:
-            student['marks'] = 50
+            student['marks'] = max(0, (student.get('marks') or 0) - 50)
             notification_for_student = {
                 'message': f"1st cheating detected for {student['name']}. Your marks have been reduced to 50.",
                 'type': 'warning', 'timestamp': time.strftime('%H:%M:%S')
@@ -309,6 +325,23 @@ def cheating_simulation():
                 'message': f"2nd cheating detected for {student['name']}. Your exam has been terminated.",
                 'type': 'danger', 'timestamp': time.strftime('%H:%M:%S')
             }
+            # Mark submission as auto with final marks and update status
+            with lock:
+                SubmissionDB[cheater_roll_no] = {
+                    "answers": {},
+                    "auto": True,
+                    "marks": student['marks'],
+                    "submitted_at": datetime.now().isoformat(),
+                    "name": student_dataset.get(cheater_roll_no, "Unknown")
+                }
+                StatusDB[cheater_roll_no] = True
+            socketio.emit('submission_update', SubmissionDB)
+            socketio.emit('submission_status_update', StatusDB)
+        # Persist mark update to replicated DBs
+        try:
+            _update_replicated_db_exam_mark(cheater_roll_no, student.get('marks', 0))
+        except Exception:
+            pass
         log_message = f"Cheating detected for {student['name']} ({cheater_roll_no})."
         socketio.emit('processor_log', {'log': log_message})
         socketio.emit('student_notification', notification_for_student)
@@ -361,6 +394,27 @@ class ProcessorServer:
         self.metadata = {}
         self.chunk_locks = {i: RWLock() for i in range(chunks)}
         self._init_or_load()
+
+    def set_exam_mark(self, roll, exam_mark):
+        if roll not in self.primary:
+            return
+        # Attach/update exam mark field within marks
+        record = self.primary[roll]
+        record.setdefault("marks", {})
+        record["marks"]["exam"] = exam_mark
+        # mirror to replica
+        self.replica[roll] = dict(record)
+        self._save()
+        socketio.emit('db_state', {
+            'primary': self.primary,
+            'replica': self.replica
+        })
+
+    def get_chunk_rolls(self, chunk_id):
+        try:
+            return list(self.metadata.get("chunks", [])[chunk_id]["range"])  # list of roll ids
+        except Exception:
+            return []
 
     def _init_or_load(self):
         if not os.path.exists(PRIMARY_FILE):
@@ -486,6 +540,81 @@ def write_db():
         'primary': processor_server.primary,
         'replica': processor_server.replica
     })
+
+def _update_replicated_db_exam_mark(roll, exam_mark):
+    try:
+        cid = processor_server._chunk_for_roll(roll)
+        rw = processor_server.chunk_locks[cid]
+        # best-effort try to acquire write; if not, skip silently
+        acquired = rw.try_acquire_write()
+        try:
+            processor_server.set_exam_mark(roll, exam_mark)
+        finally:
+            if acquired:
+                rw.release_write()
+    except Exception:
+        pass
+
+# --- CURSOR-BASED READ ENDPOINTS ---
+@app.route('/init_cursor', methods=['POST'])
+def init_cursor():
+    data = request.json or {}
+    try:
+        chunk_id = int(data.get('chunk_id'))
+        batch_size = int(data.get('batch_size', 5))
+    except Exception:
+        return jsonify({"error": "Invalid parameters"}), 400
+    if chunk_id < 0 or chunk_id >= processor_server.chunks:
+        return jsonify({"error": f"Invalid chunk_id {chunk_id}"}), 400
+    lock_obj = processor_server.chunk_locks[chunk_id]
+    if not lock_obj.try_acquire_read():
+        return jsonify({"error": f"Chunk {chunk_id} is write-locked"}), 423
+    rolls = processor_server.get_chunk_rolls(chunk_id)
+    cursor_id = f"{chunk_id}-{int(time.time()*1000)}-{random.randint(1000,9999)}"
+    cursors[cursor_id] = {
+        'chunk_id': chunk_id,
+        'index': 0,
+        'batch_size': batch_size,
+        'rolls': rolls,
+    }
+    socketio.emit('db_log', {'log': f"Cursor {cursor_id} opened on Chunk {chunk_id} with batch size {batch_size}. Read lock acquired."})
+    return jsonify({"cursor_id": cursor_id, "total": len(rolls)})
+
+@app.route('/read_cursor', methods=['GET'])
+def read_cursor():
+    cursor_id = request.args.get('cursor_id')
+    if not cursor_id or cursor_id not in cursors:
+        return jsonify({"error": "Unknown cursor_id"}), 404
+    st = cursors[cursor_id]
+    start = st['index']
+    end = min(start + st['batch_size'], len(st['rolls']))
+    batch_rolls = st['rolls'][start:end]
+    records = []
+    for roll in batch_rolls:
+        rec = processor_server.primary.get(roll)
+        if rec:
+            records.append(rec)
+    st['index'] = end
+    has_more = end < len(st['rolls'])
+    socketio.emit('db_log', {'log': f"Cursor {cursor_id} read {len(records)} record(s) from index {start} to {end-1}."})
+    return jsonify({
+        "records": records,
+        "next_index": st['index'],
+        "has_more": has_more
+    })
+
+@app.route('/release_cursor', methods=['POST'])
+def release_cursor():
+    data = request.json or {}
+    cursor_id = data.get('cursor_id')
+    if not cursor_id or cursor_id not in cursors:
+        return jsonify({"error": "Unknown cursor_id"}), 404
+    st = cursors.pop(cursor_id)
+    chunk_id = st['chunk_id']
+    lock_obj = processor_server.chunk_locks[chunk_id]
+    lock_obj.release_read()
+    socketio.emit('db_log', {'log': f"Cursor {cursor_id} released on Chunk {chunk_id}. Read lock released."})
+    return jsonify({"success": True})
 
 # --- SOCKET.IO CONNECTION ---
 @socketio.on('connect')
@@ -672,6 +801,6 @@ def handle_stop_ricart():
 # --- MAIN EXECUTION BLOCK ---
 if __name__ == '__main__':
     processor_server = ProcessorServer()
-    print(f"Website running on http://0.0.0.0:{os.environ.get('PORT', 8080)}")
+    print(f"Website running on http://127.0.0.1:{os.environ.get('PORT', 8080)}")
     socketio.run(app, host='0.0.0.0', port=int(os.environ.get('PORT', 8080)), debug=False, allow_unsafe_werkzeug=True)
 

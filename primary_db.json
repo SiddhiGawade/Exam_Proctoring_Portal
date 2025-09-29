@@ -1,102 +1,112 @@
 {
-    "24102A2001": {
-        "roll": "24102A2001",
-        "name": "SIDDHI GAWADE",
-        "marks": {
-            "IAS": 22,
-            "MSE": 25,
-            "ESE": 41,
-            "total": 78
-        }
-    },
-    "24102A2002": {
-        "roll": "24102A2002",
-        "name": "SANDEEP MAJUMDAR",
-        "marks": {
-            "IAS": 11,
-            "MSE": 26,
-            "ESE": 38,
-            "total": 75
-        }
-    },
-    "24102A2003": {
-        "roll": "24102A2003",
-        "name": "CHIRAG CHAUDHARI",
-        "marks": {
-            "IAS": 30,
-            "MSE": 23,
-            "ESE": 41,
-            "total": 94
-        }
-    },
-    "24102A2004": {
-        "roll": "24102A2004",
-        "name": "ANUSHKA UNDE",
-        "marks": {
-            "IAS": 10,
-            "MSE": 21,
-            "ESE": 46,
-            "total": 77
-        }
-    },
-    "24102A2005": {
-        "roll": "24102A2005",
-        "name": "SHAZIYA SHAIKH",
-        "marks": {
-            "IAS": 19,
-            "MSE": 21,
-            "ESE": 41,
-            "total": 81
-        }
-    },
-    "24102A2006": {
-        "roll": "24102A2006",
-        "name": "TAMANNA SHAIKH",
-        "marks": {
-            "IAS": 23,
-            "MSE": 27,
-            "ESE": 27,
-            "total": 77
-        }
-    },
-    "24102A2007": {
-        "roll": "24102A2007",
-        "name": "TANSHIQ KULKARNI",
-        "marks": {
-            "IAS": 25,
-            "MSE": 24,
-            "ESE": 42,
-            "total": 91
-        }
-    },
-    "24102A2008": {
-        "roll": "24102A2008",
-        "name": "ARAV MAHIND",
-        "marks": {
-            "IAS": 25,
-            "MSE": 25,
-            "ESE": 48,
-            "total": 87
-        }
-    },
-    "24102A2009": {
-        "roll": "24102A2009",
-        "name": "PREM DESHMUKH",
-        "marks": {
-            "IAS": 29,
-            "MSE": 20,
-            "ESE": 44,
-            "total": 93
-        }
-    },
-    "24102A2010": {
-        "roll": "24102A2010",
-        "name": "ISHA BANSAL",
-        "marks": {
-            "IAS": 27,
-            "MSE": 30,
-            "ESE": 46,
-            "total": 103
-        }
+  "24102A2001": {
+    "roll": "24102A2001",
+    "name": "SIDDHI GAWADE",
+    "marks": {
+      "IAS": 22,
+      "MSE": 25,
+      "ESE": 41,
+      "total": 78,
+      "exam": 100
     }
+  },
+  "24102A2002": {
+    "roll": "24102A2002",
+    "name": "SANDEEP MAJUMDAR",
+    "marks": {
+      "IAS": 11,
+      "MSE": 26,
+      "ESE": 38,
+      "total": 75,
+      "exam": 100
+    }
+  },
+  "24102A2003": {
+    "roll": "24102A2003",
+    "name": "CHIRAG CHAUDHARI",
+    "marks": {
+      "IAS": 30,
+      "MSE": 23,
+      "ESE": 41,
+      "total": 94,
+      "exam": 100
+    }
+  },
+  "24102A2004": {
+    "roll": "24102A2004",
+    "name": "ANUSHKA UNDE",
+    "marks": {
+      "IAS": 10,
+      "MSE": 21,
+      "ESE": 46,
+      "total": 77,
+      "exam": 0
+    }
+  },
+  "24102A2005": {
+    "roll": "24102A2005",
+    "name": "SHAZIYA SHAIKH",
+    "marks": {
+      "IAS": 19,
+      "MSE": 21,
+      "ESE": 41,
+      "total": 81,
+      "exam": 0
+    }
+  },
+  "24102A2006": {
+    "roll": "24102A2006",
+    "name": "TAMANNA SHAIKH",
+    "marks": {
+      "IAS": 23,
+      "MSE": 27,
+      "ESE": 27,
+      "total": 77,
+      "exam": 50
+    }
+  },
+  "24102A2007": {
+    "roll": "24102A2007",
+    "name": "TANSHIQ KULKARNI",
+    "marks": {
+      "IAS": 25,
+      "MSE": 24,
+      "ESE": 42,
+      "total": 91,
+      "exam": 0
+    }
+  },
+  "24102A2008": {
+    "roll": "24102A2008",
+    "name": "ARAV MAHIND",
+    "marks": {
+      "IAS": 25,
+      "MSE": 25,
+      "ESE": 48,
+      "total": 87,
+      "exam": 0
+    }
+  },
+  "24102A2009": {
+    "roll": "24102A2009",
+    "name": "PREM DESHMUKH",
+    "marks": {
+      "IAS": 29,
+      "MSE": 20,
+      "ESE": 44,
+      "total": 93,
+      "exam": 0
+    }
+  },
+  "24102A2010": {
+    "roll": "24102A2010",
+    "name": "ISHA BANSAL",
+    "marks": {
+      "IAS": 27,
+      "MSE": 30,
+      "ESE": 46,
+      "total": 103,
+      "exam": 0
+    }
+  }
 }

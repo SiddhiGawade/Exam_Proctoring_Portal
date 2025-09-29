@@ -90,6 +90,29 @@
         <div id="chunks-container">
             <!-- Chunks will be dynamically loaded here -->
         </div>
+
+        <!-- Cursor Demo -->
+        <div class="card mt-4">
+            <div class="card-header">Cursor-Based Read Demo</div>
+            <div class="card-body">
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-2">
+                        <label class="form-label">Chunk ID</label>
+                        <input type="number" class="form-control" id="cursor-chunk" min="0" value="0">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Batch Size</label>
+                        <input type="number" class="form-control" id="cursor-batch" min="1" value="3">
+                    </div>
+                    <div class="col-md-8 text-end">
+                        <button class="btn btn-primary" id="btn-open-cursor">Open Cursor</button>
+                        <button class="btn btn-secondary" id="btn-read-cursor">Read Next Batch</button>
+                        <button class="btn btn-danger" id="btn-release-cursor">Release Cursor</button>
+                    </div>
+                </div>
+                <div class="mt-3" id="cursor-output"></div>
+            </div>
+        </div>
     </div>
 
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
@@ -98,6 +121,8 @@
         const socket = io();
         const dbLogDiv = document.getElementById('db-log');
         const chunksContainer = document.getElementById('chunks-container');
+        const cursorOutput = document.getElementById('cursor-output');
+        let currentCursorId = null;
 
         function appendLog(message, type = 'info') {
             const p = document.createElement('p');
@@ -247,6 +272,65 @@
                     appendLog(`Write successful for Roll ${roll}.`, 'success');
                 } else {
                     appendLog(`Write failed for Roll ${roll}: ${data.error}`, 'danger');
+                }
+            });
+        });
+
+        // Cursor demo handlers
+        document.getElementById('btn-open-cursor').addEventListener('click', () => {
+            const chunkId = parseInt(document.getElementById('cursor-chunk').value);
+            const batchSize = parseInt(document.getElementById('cursor-batch').value);
+            fetch('/init_cursor', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ chunk_id: chunkId, batch_size: batchSize })
+            }).then(r => r.json()).then(data => {
+                if (data.error) {
+                    appendLog(`Open cursor failed: ${data.error}`, 'danger');
+                } else {
+                    currentCursorId = data.cursor_id;
+                    cursorOutput.innerHTML = `<p class="text-success">Cursor opened: ${currentCursorId} (total=${data.total})</p>`;
+                    appendLog(`Cursor opened ${currentCursorId} on chunk ${chunkId}.`, 'success');
+                }
+            });
+        });
+
+        document.getElementById('btn-read-cursor').addEventListener('click', () => {
+            if (!currentCursorId) {
+                appendLog('No cursor open. Open a cursor first.', 'danger');
+                return;
+            }
+            fetch(`/read_cursor?cursor_id=${encodeURIComponent(currentCursorId)}`)
+                .then(r => r.json()).then(data => {
+                    if (data.error) {
+                        appendLog(`Read cursor failed: ${data.error}`, 'danger');
+                    } else {
+                        const html = (data.records || []).map(rec => `Roll ${rec.roll}: ${rec.name} — Total ${rec.marks.total}`).join('<br>');
+                        cursorOutput.innerHTML = `<div class="alert alert-info">${html || 'No records'}</div>`;
+                        appendLog(`Read batch: ${data.records.length} record(s). has_more=${data.has_more}.`, 'secondary');
+                        if (!data.has_more) {
+                            appendLog('No more records in cursor.', 'secondary');
+                        }
+                    }
+                });
+        });
+
+        document.getElementById('btn-release-cursor').addEventListener('click', () => {
+            if (!currentCursorId) {
+                appendLog('No cursor to release.', 'danger');
+                return;
+            }
+            fetch('/release_cursor', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ cursor_id: currentCursorId })
+            }).then(r => r.json()).then(data => {
+                if (data.success) {
+                    appendLog(`Cursor ${currentCursorId} released.`, 'success');
+                    cursorOutput.innerHTML = '<p class="text-muted">Cursor released.</p>';
+                    currentCursorId = null;
+                } else {
+                    appendLog(`Release failed: ${data.error}`, 'danger');
                 }
             });
         });

@@ -66,7 +66,13 @@
                 // The data received is an array of objects. We need to iterate over them correctly.
                 students.forEach(([roll_no, student_data]) => {
                     const row = document.createElement('tr');
-                    const status = student_data.exam_terminated ? 'Terminated' : 'Active';
+                    // Default Active; show Submitted only if actually submitted; Terminated if exam_terminated
+                    let status = 'Active';
+                    if (student_data.exam_terminated) {
+                        status = 'Terminated';
+                    } else if (window.__submissionStatus && window.__submissionStatus[roll_no]) {
+                        status = 'Submitted';
+                    }
                     if (student_data.exam_terminated) {
                         row.classList.add('terminated');
                     }
@@ -80,10 +86,15 @@
                 });
             });
 
+            // Cache submission status to derive Submitted vs Active in marksheet
+            window.__submissionStatus = {};
+
             // Listen for 'submission_update' event
             socket.on('submission_update', (submissions) => {
                 submissionBody.innerHTML = '';
+                window.__submissionStatus = {};
                 for (const [sid, data] of Object.entries(submissions)) {
+                    window.__submissionStatus[sid] = true;
                     const row = document.createElement('tr');
                     const submissionType = data.auto ? 'Auto' : 'Manual';
                     row.innerHTML = `
@@ -95,6 +106,9 @@
                     `;
                     submissionBody.appendChild(row);
                 }
+                // Refresh marksheet rows to update status based on latest submission status
+                // Request a re-render by reusing the last marks_update payload isn't directly available,
+                // but the next marks_update will reflect it. Alternatively, we can emit a no-op to trigger UI refresh.
             });
         });
     </script>
